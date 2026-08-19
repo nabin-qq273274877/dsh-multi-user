@@ -309,7 +309,7 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
   return jsxs('div', { style: { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', padding: '0 4px' }, children: [
     // header：左侧「工作区」文字，右侧 搜索/视图/添加 三按钮（对齐原生）
     jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 4, height: 36, margin: '2px -4px 4px', padding: '0 4px' }, children: [
-      jsx('span', { style: { flex: 'none', maxWidth: '45%', marginRight: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--dsw-alias-label-tertiary)', lineHeight: '20px' }, children: groupBy === 'flat' ? '会话' : '工作区' }),
+      jsx('span', { style: { flex: 'none', maxWidth: searchExpanded ? 0 : '45%', marginRight: searchExpanded ? 0 : 'auto', opacity: searchExpanded ? 0 : 1, visibility: searchExpanded ? 'hidden' : 'visible', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--dsw-alias-label-tertiary)', lineHeight: '20px', transition: 'max-width .18s ease, opacity .12s ease, margin-right .18s ease' }, children: groupBy === 'flat' ? '会话' : '工作区' }),
 
       // 搜索：同一容器，放大镜始终在左，输入框 width 0→100% 过渡（照抄原生）
       jsxs('div', {
@@ -354,8 +354,8 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
         ],
       }),
 
-      // 视图：分组/排序菜单（照抄 ViewOptionsMenu）
-      jsx(Menu, {
+      // 视图：分组/排序菜单（照抄 ViewOptionsMenu；搜索展开时隐藏）
+      !searchExpanded && jsx(Menu, {
         open: viewMenuOpen,
         onClose: () => setViewMenuOpen(false),
         align: 'end',
@@ -379,8 +379,8 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
         anchor: jsx('button', { type: 'button', title: '视图', onClick: () => setViewMenuOpen((v) => !v), style: iconBtnStyle, children: jsx(IconPersonalizationOutline16, {}) }),
       }),
 
-      // 添加：打开目录选择器（browse）
-      jsx('button', { ref: addBtnRef, type: 'button', title: '新建工作区', onClick: openAddFlow, style: iconBtnStyle, children: jsx(IconProjectAddOutline16, { size: 16 }) }),
+      // 添加：打开目录选择器（browse；搜索展开时隐藏）
+      !searchExpanded && jsx('button', { ref: addBtnRef, type: 'button', title: '新建工作区', onClick: openAddFlow, style: iconBtnStyle, children: jsx(IconProjectAddOutline16, { size: 16 }) }),
     ] }),
 
     // 目录选择器（browse 能力，Modal 弹出）
