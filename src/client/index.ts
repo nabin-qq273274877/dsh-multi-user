@@ -561,7 +561,7 @@ function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: an
     onClose: onCancel,
     title: '选择工作区目录',
     closeLabel: '取消',
-    className: dirPickerModalStyle,
+    className: 'dsh-mu-dirpicker',
     headless: true,
     children: [
       jsxs('div', { style: { display: 'flex', flexDirection: 'column', height: 'min(500px, 100dvh - 32px)' }, children: [
@@ -644,15 +644,24 @@ function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: an
   });
 }
 
-const dirPickerModalStyle: CSSProperties = {
-  width: 'min(680px, 100%)',
-  padding: 0,
-  gap: 0,
-};
-
 /* ---------------- 插件 body ---------------- */
 
+// 目录选择器弹窗宽度样式（Modal 的 className 是 CSS 类名，注入样式对齐原生 680px 宽）
+const DIRPICKER_CSS = `.dsh-mu-dirpicker.dsh-mu-dirpicker{width:min(680px,100%);max-width:calc(100vw - 32px);padding:0;gap:0}`;
+
+function injectDirPickerCss(): void {
+  if (typeof document === 'undefined') return;
+  const tagId = 'dsh-multi-user/dir-picker.css';
+  if (document.querySelector(`style[data-plugin-css="${tagId}"]`)) return;
+  const style = document.createElement('style');
+  style.dataset.plugin = 'dsh-multi-user';
+  style.dataset.pluginCss = tagId;
+  style.textContent = DIRPICKER_CSS;
+  document.head.appendChild(style);
+}
+
 export function apply(ctx: any): void {
+  injectDirPickerCss();
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
     name: 'sidebar.workspaces',
     priority: -1, // 低于官方 ui-workspace 的默认 0，shadow 原生浏览区（lowest renders）
