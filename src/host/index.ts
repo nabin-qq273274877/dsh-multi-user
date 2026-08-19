@@ -183,7 +183,7 @@ function renderSetupPage(): string {
         if(p!==p2)return toast('两次输入的密码不一致','err');
         var btn=this;btn.disabled=true;btn.textContent='设置中…';
         post('/api/mu/admin/owner',{username:u,password:p}).then(function(r){
-          if(r.json.ok){toast('主管理员已设置，即将跳转登录…','ok');setTimeout(function(){location.href='/';},800);}
+          if(r.json.ok){toast('主管理员已设置，正在自动登录…','ok');setTimeout(function(){location.href='/';},500);}
           else{btn.disabled=false;btn.textContent='设置主管理员';toast(r.json.error||'设置失败','err');}
         });
       };
@@ -250,12 +250,17 @@ async function handleAdmin(store: DataStore, lifecycle: LifecycleManager, req: I
   const method = (req.method ?? 'GET').toUpperCase();
   const key = `${method} ${pathname}`;
 
-  // bootstrap：初始化主管理员（fresh 态免登录）
+  // bootstrap：初始化主管理员（fresh 态免登录，成功后直接签 JWT 自动登录）
   if (key === 'POST /api/mu/admin/owner') {
     if (lifecycle.state() !== 'fresh') return json(res, 400, { ok: false, error: '主管理员已设置' });
     const body = await readBody(req);
     const r = await lifecycle.setOwner({ username: String(body.username ?? ''), password: String(body.password ?? '') });
-    return json(res, r.ok ? 200 : 400, r);
+    if (!r.ok || !r.userId) return json(res, 400, r);
+    const owner = store.getUserById(r.userId);
+    if (!owner) return json(res, 500, { ok: false, error: '主管理员创建失败' });
+    // setup 完成即自动登录：签发 JWT 写 cookie，前端跳转 / 直接进入 DSH
+    finishLogin(store, res, owner);
+    return;
   }
 
   // 其余管理接口需登录
