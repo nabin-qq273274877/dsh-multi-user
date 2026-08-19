@@ -70,8 +70,8 @@ async function main() {
     define: {
       'process.env.NODE_ENV': '"production"',
     },
-    // react 由 DSH loader 的 require("react") 解析
-    external: ['react', 'react/jsx-runtime'],
+    // react 与 primitives 由 DSH loader 的 require(...) 解析（primitives 带 katex 等资源，external 化避免打包字体）
+    external: ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-primitives'],
   });
 
   const clientCode = clientResult.outputFiles[0].text;

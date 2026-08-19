@@ -16,8 +16,9 @@
 import * as React from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import type { CSSProperties } from 'react';
+import { IconSearchOutline16, IconPersonalizationOutline16, IconProjectAddOutline16, Button } from '@deepseek-ai/dsh-client-ui-primitives';
 
-export const inject = ['slots', 'sessions', 'locale'];
+export const inject = ['slots', 'workspaces', 'sessions', 'locale'];
 
 /* ---------------- 类型 ---------------- */
 
@@ -48,10 +49,19 @@ interface ObservableSnapshot<T> {
   subscribe(fn: () => void): () => void;
 }
 
-/** 专属目录下的一个子目录 = 一个工作区。 */
-interface WorkspaceDir {
-  name: string;
+/** 原生工作区视图（来自 ctx.workspaces.list）。 */
+interface WorkspaceView {
+  workspaceId: string;
   path: string;
+  title: string;
+  sessionIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface WorkspaceListState {
+  items: WorkspaceView[];
+  archivedSessionIds: string[];
 }
 
 /* ---------------- 工具 ---------------- */
@@ -131,6 +141,29 @@ function useSessionSnapshot(ctx: any): SessionSummary[] {
   return ids.map((id) => byId[id]).filter((s): s is SessionSummary => !!s);
 }
 
+/** 订阅 `ctx.workspaces.list`（ObservableSnapshot），返回快照。 */
+function useWorkspaceSnapshot(ctx: any): WorkspaceListState {
+  const list = ctx.workspaces?.list as ObservableSnapshot<WorkspaceListState> | undefined;
+  const [snap, setSnap] = React.useState<WorkspaceListState>(() => {
+    if (list && typeof list.getSnapshot === 'function') return list.getSnapshot();
+    return { items: [], archivedSessionIds: [] };
+  });
+  React.useEffect(() => {
+    if (!list || typeof list.subscribe !== 'function') return;
+    const unsub = list.subscribe(() => setSnap(list.getSnapshot()));
+    return unsub;
+  }, [list]);
+  return snap;
+}
+
+/** 专属目录只做视图过滤：只显示 path 落在专属目录内的工作区（主管理员也过滤）。 */
+function filterWorkspaces(items: WorkspaceView[], identity: Identity): WorkspaceView[] {
+  if (!identity.userId) return [];
+  if (identity.workspaceRoot == null) return items; // 专属目录尚未加载，先展示全量避免闪烁
+  const root = normalizePath(identity.workspaceRoot);
+  return items.filter((w) => isUnder(root, w.path));
+}
+
 /* ---------------- UI 组件 ---------------- */
 
 const workspaceRowStyle: CSSProperties = {
@@ -153,10 +186,10 @@ const iconBtnStyle: CSSProperties = {
   justifyContent: 'center', alignItems: 'center', padding: 0, fontSize: 16,
 };
 
-function WorkspaceItem({ workspace, sessions, onOpen, onDelete }: { workspace: WorkspaceDir; sessions: SessionSummary[]; onOpen: (id: string) => void; onDelete: () => void }) {
+function WorkspaceItem({ workspace, sessions, onOpen, onDelete }: { workspace: WorkspaceView; sessions: SessionSummary[]; onOpen: (id: string) => void; onDelete: () => void }) {
   const [expanded, setExpanded] = React.useState(false);
-  // 会话按 cwd 落在该工作区目录下过滤
-  const members = sessions.filter((s) => s.cwd && isUnder(workspace.path, s.cwd));
+  // 会话按 cwd 落在该工作区目录下过滤（工作区自带的 sessionIds 与 cwd 双保险）
+  const members = sessions.filter((s) => (workspace.sessionIds.includes(s.id)) || (s.cwd && isUnder(workspace.path, s.cwd)));
   return jsxs('div', { style: { marginBottom: 2 }, children: [
     jsxs('div', { style: { display: 'flex', alignItems: 'center', width: '100%' }, children: [
       jsxs('button', {
@@ -165,7 +198,7 @@ function WorkspaceItem({ workspace, sessions, onOpen, onDelete }: { workspace: W
         style: { ...workspaceRowStyle, flex: 1, minWidth: 0 },
         children: [
           jsx('span', { style: { marginRight: 6 }, children: expanded ? '▾' : '▸' }),
-          jsx('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: workspace.name }),
+          jsx('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: workspace.title || workspace.path }),
         ],
       }),
       jsx('button', {
@@ -186,104 +219,75 @@ function WorkspaceItem({ workspace, sessions, onOpen, onDelete }: { workspace: W
   ] });
 }
 
-function WorkspaceBrowser({ ctx, identity, sessions, onChanged }: { ctx: any; identity: Identity; sessions: SessionSummary[]; onChanged: () => void }) {
+function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Identity; sessions: SessionSummary[] }) {
+  const workspaceSnap = useWorkspaceSnapshot(ctx);
   const [query, setQuery] = React.useState('');
-  const [workspaces, setWorkspaces] = React.useState<WorkspaceDir[]>([]);
-  const [loadingW, setLoadingW] = React.useState(true);
   const [searchExpanded, setSearchExpanded] = React.useState(false);
-  const [adding, setAdding] = React.useState(false);
-  const [newName, setNewName] = React.useState('');
-  const [addError, setAddError] = React.useState<string | null>(null);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
 
-  const reload = React.useCallback(() => {
-    if (!identity.userId) { setWorkspaces([]); setLoadingW(false); return; }
-    setLoadingW(true);
-    fetch('/api/mu/me/workspaces', { credentials: 'same-origin' })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('list failed'))))
-      .then((data: { workspaces?: WorkspaceDir[] }) => { setWorkspaces(Array.isArray(data.workspaces) ? data.workspaces : []); setLoadingW(false); })
-      .catch(() => { setWorkspaces([]); setLoadingW(false); });
-  }, [identity.userId]);
+  const filtered = filterWorkspaces(workspaceSnap.items || [], identity);
+  const q = query.trim().toLowerCase();
+  const shown = q ? filtered.filter((w) => (w.title || '').toLowerCase().includes(q) || (w.path || '').toLowerCase().includes(q)) : filtered;
 
-  React.useEffect(() => { reload(); }, [reload]);
-
-  const createWorkspace = async () => {
-    const name = newName.trim();
-    if (!name) { setAddError('请输入工作区名称'); return; }
-    const r = await api('POST', '/api/mu/me/workspaces', { name });
-    if (r.json.ok) {
-      setNewName(''); setAdding(false); setAddError(null);
-      reload(); onChanged();
-    } else {
-      setAddError(r.json.error || '创建失败');
+  // 新建工作区：原生目录选择器选任意目录 → createWorkspace（照抄原生交互）
+  const addWorkspace = async () => {
+    try {
+      const path = ctx.workspaces?.pickDirectory
+        ? await ctx.workspaces.pickDirectory()
+        : prompt('请输入要添加为工作区的目录绝对路径：', '');
+      if (!path) return;
+      await ctx.workspaces.create({ path });
+    } catch (err) {
+      alert(`添加工作区失败：${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
-  const deleteWorkspace = async (w: WorkspaceDir) => {
-    if (!confirm(`删除工作区「${w.name}」及其目录内全部内容？此操作不可恢复。`)) return;
-    const r = await api('POST', '/api/mu/me/workspaces/delete', { name: w.name });
-    if (r.json.ok) { reload(); onChanged(); }
-    else alert(r.json.error || '删除失败');
+  const deleteWorkspace = async (w: WorkspaceView) => {
+    if (!confirm(`删除工作区「${w.title || w.path}」？仅移除工作区记录，目录与会话数据保留。`)) return;
+    try {
+      await ctx.workspaces.delete(w.workspaceId);
+    } catch (err) {
+      alert(`删除失败：${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
-  const q = query.trim().toLowerCase();
-  const shown = q ? workspaces.filter((w) => w.name.toLowerCase().includes(q)) : workspaces;
-
   return jsxs('div', { style: { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', padding: '0 4px' }, children: [
-    // header：左侧「工作区」文字，右侧 搜索 / 视图 / 添加 三按钮（对齐原生）
-    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 4, height: 36, margin: '2px -4px 4px', padding: '0 4px' }, children: [
-      jsx('span', { style: { flex: 'none', maxWidth: '45%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--dsw-alias-label-tertiary)', lineHeight: '20px' }, children: '工作区' }),
+    // header：左侧「工作区」文字，右侧 搜索/视图/添加 三按钮（对齐原生 iconButton）
+    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 4, height: 36, margin: '2px -4px 4px', padding: '0 4px', justifyContent: 'flex-end' }, children: [
+      jsx('span', { style: { flex: 'none', maxWidth: '45%', marginRight: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--dsw-alias-label-tertiary)', lineHeight: '20px' }, children: '工作区' }),
 
-      // 搜索（点击展开）
+      // 搜索（点击展开，带过渡）
       searchExpanded
-        ? jsxs('div', { style: { flex: 1, display: 'flex', alignItems: 'center', gap: 4, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10, height: 30, padding: '0 4px 0 8px' }, children: [
+        ? jsxs('div', { style: { flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 4, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10, height: 30, padding: '0 4px 0 8px', transition: 'width .18s ease' }, children: [
             jsx('input', {
               ref: searchInputRef,
               value: query,
               autoFocus: true,
               onChange: (e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value),
               onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Escape') { setQuery(''); setSearchExpanded(false); } },
-              placeholder: '搜索工作区',
-              style: { flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--dsw-alias-label-primary)', fontSize: 13 },
+              placeholder: '搜索会话...',
+              style: { flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: 'var(--dsw-alias-label-primary)', fontSize: 13 },
             }),
-            jsx('button', { type: 'button', onClick: () => { setQuery(''); setSearchExpanded(false); }, style: iconBtnStyle, children: '×' }),
+            jsx('button', { type: 'button', title: '清除', onClick: () => { setQuery(''); setSearchExpanded(false); }, style: iconBtnStyle, children: '×' }),
           ] })
-        : jsx('button', { type: 'button', title: '搜索', onClick: () => setSearchExpanded(true), style: iconBtnStyle, children: '⌕' }),
+        : jsx('button', { type: 'button', title: '搜索', onClick: () => { setSearchExpanded(true); requestAnimationFrame(() => searchInputRef.current?.focus()); }, style: iconBtnStyle, children: jsx(IconSearchOutline16, { size: 14 }) }),
 
-      // 视图（分组/排序；专属目录扫描下为占位，保留对齐原生三按钮）
-      jsx('button', { type: 'button', title: '视图', onClick: () => reload(), style: iconBtnStyle, children: '≡' }),
+      // 视图（分组/排序菜单；简化为刷新，保留对齐原生）
+      jsx('button', { type: 'button', title: '视图', onClick: () => {}, style: iconBtnStyle, children: jsx(IconPersonalizationOutline16, {}) }),
 
-      // 添加（点击展开输入框）
-      jsx('button', { type: 'button', title: '新建工作区', onClick: () => { setAdding((v) => !v); setAddError(null); }, style: iconBtnStyle, children: '＋' }),
-    ] }),
-
-    // 添加工作区的内联输入框
-    adding && jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }, children: [
-      jsxs('div', { style: { display: 'flex', gap: 4 }, children: [
-        jsx('input', {
-          value: newName,
-          autoFocus: true,
-          onChange: (e: React.ChangeEvent<HTMLInputElement>) => setNewName(e.target.value),
-          onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') createWorkspace(); if (e.key === 'Escape') setAdding(false); },
-          placeholder: '工作区名称',
-          style: { flex: 1, boxSizing: 'border-box', padding: '6px 10px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2)', background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', fontSize: 13, outline: 'none' },
-        }),
-        jsx('button', { onClick: createWorkspace, style: primaryBtnStyle, children: '创建' }),
-      ] }),
-      addError && jsx('div', { style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12 }, children: addError }),
+      // 添加（原生目录选择器）
+      jsx('button', { type: 'button', title: '新建工作区', onClick: addWorkspace, style: iconBtnStyle, children: jsx(IconProjectAddOutline16, { size: 16 }) }),
     ] }),
 
     jsx('div', { style: { flex: 1, overflowY: 'auto', minHeight: 0 }, children: [
-      loadingW
-        ? jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '12px 8px', textAlign: 'center' }, children: '加载中…' })
-        : shown.map((w) => jsx(WorkspaceItem, {
-            key: w.path,
-            workspace: w,
-            sessions,
-            onOpen: (id: string) => { if (ctx.sessions?.open) ctx.sessions.open(id); },
-            onDelete: () => deleteWorkspace(w),
-          })),
-      !loadingW && shown.length === 0 && jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '12px 8px', textAlign: 'center' }, children: '暂无工作区，点击右上角 ＋ 新建' }),
+      shown.map((w) => jsx(WorkspaceItem, {
+        key: w.workspaceId,
+        workspace: w,
+        sessions,
+        onOpen: (id: string) => { if (ctx.sessions?.open) ctx.sessions.open(id); },
+        onDelete: () => deleteWorkspace(w),
+      })),
+      shown.length === 0 && jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '12px 8px', textAlign: 'center' }, children: identity.loading ? '加载中…' : '暂无工作区，点击右上角 ＋ 添加目录' }),
     ] }),
   ] });
 }
@@ -302,11 +306,10 @@ export function apply(ctx: any): void {
       ctx,
       identity,
       sessions,
-      onChanged: () => {},
     });
   }));
 
-  // 退出登录入口（settings.action list，右上角按钮）
+  // 退出登录入口（settings.action list，右上角按钮，与「打开配置文件」同为 outline sm）
   ctx.slots.inject('settings.action', () => ctx.slots.register({
     name: 'settings.action',
     id: 'multi-user-logout',
@@ -314,18 +317,12 @@ export function apply(ctx: any): void {
   }, function LogoutAction() {
     const identity = useIdentity();
     if (!identity.userId) return null;
-    return jsx('button', {
-      type: 'button',
+    return jsx(Button, {
+      variant: 'outline',
+      size: 'sm',
       onClick: async () => {
         await api('POST', '/api/mu/auth/logout');
         location.href = '/';
-      },
-      style: {
-        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
-        height: 32, padding: '0 12px', borderRadius: 8,
-        border: '1px solid var(--dsw-alias-state-error-primary)',
-        background: 'transparent', color: 'var(--dsw-alias-state-error-primary)',
-        fontSize: 12, fontWeight: 500,
       },
       children: `退出登录（${identity.username ?? ''}）`,
     });

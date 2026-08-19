@@ -274,9 +274,9 @@ async function handleAdmin(store: DataStore, lifecycle: LifecycleManager, req: I
   const actor = store.getUserById(userId);
   if (!actor) return json(res, 401, { error: 'unauthorized' });
 
-  // ---- 当前用户自己的信息与专属工作区（所有登录用户可用，非 admin 专属） ----
+  // ---- 当前用户自己的信息（所有登录用户可用，非 admin 专属） ----
 
-  // 当前用户身份 + 专属目录
+  // 当前用户身份 + 专属目录（专属目录仅作侧边栏视图过滤依据）
   if (key === 'GET /api/mu/me/grants') {
     return json(res, 200, {
       userId,
@@ -284,28 +284,6 @@ async function handleAdmin(store: DataStore, lifecycle: LifecycleManager, req: I
       role: actor.role,
       workspaceRoot: store.getWorkspaceRoot(userId),
     });
-  }
-
-  // 列出当前用户专属目录下的子目录（= 工作区）
-  if (key === 'GET /api/mu/me/workspaces') {
-    return json(res, 200, {
-      workspaceRoot: store.getWorkspaceRoot(userId),
-      workspaces: store.listWorkspaceSubdirs(userId),
-    });
-  }
-
-  // 新建工作区（专属目录下建子目录）
-  if (key === 'POST /api/mu/me/workspaces') {
-    const body = await readBody(req);
-    const r = store.createWorkspaceSubdir(userId, String(body.name ?? ''));
-    return json(res, r.ok ? 200 : 400, r);
-  }
-
-  // 删除工作区（专属目录下删子目录）
-  if (key === 'POST /api/mu/me/workspaces/delete') {
-    const body = await readBody(req);
-    const r = store.deleteWorkspaceSubdir(userId, String(body.name ?? ''));
-    return json(res, r.ok ? 200 : 400, r);
   }
 
   // 修改自己的密码（含主管理员，问题 3）
