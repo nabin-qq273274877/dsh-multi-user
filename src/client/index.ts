@@ -427,11 +427,12 @@ interface DirectoryListing {
 
 /** 目录选择模态框：Miller 多列 + 面包屑 + 新建文件夹 + 打开（对齐原生 browse 选择器）。 */
 function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: any; open: boolean; initialPath?: string; onPick: (path: string) => void; onCancel: () => void }) {
-  // columnStack：已展开的目录层级（左→右，每层一个 DirectoryListing）
-  const [columnStack, setColumnStack] = React.useState<DirectoryListing[]>([]);
+  // 两列递归导航（对齐原生）：parent = 父目录，selected = 选中的条目，child = 选中目录的内容
+  const [parent, setParent] = React.useState<DirectoryListing | null>(null);
+  const [selected, setSelected] = React.useState<DirectoryEntry | null>(null);
+  const [child, setChild] = React.useState<DirectoryListing | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [showHidden, setShowHidden] = React.useState(false);
-  const [selectedPath, setSelectedPath] = React.useState<string | null>(null);
   // 新建文件夹子对话框
   const [folderDraft, setFolderDraft] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
@@ -445,43 +446,46 @@ function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: an
     return ctx.workspaces.listDirectory(path).catch((e: Error) => { setError(e.message || '无法列出目录'); return null; });
   }, [ctx]);
 
-  // 打开时重置：加载初始目录作为第一列
+  // 打开时重置：加载初始目录作为父目录
   React.useEffect(() => {
     if (!open) return;
-    setColumnStack([]);
-    setSelectedPath(null);
+    setParent(null);
+    setSelected(null);
+    setChild(null);
     setShowHidden(false);
     setFolderDraft(null);
     setCreateError(null);
     setPathDraft(null);
-    load(initialPath).then((listing: DirectoryListing | null) => { if (listing) { setColumnStack([listing]); setSelectedPath(listing.path); } });
+    load(initialPath).then((listing: DirectoryListing | null) => { if (listing) setParent(listing); });
   }, [open, load, initialPath]);
 
-  // 点某列某目录 → 在右侧展开新列
-  const descend = async (path: string) => {
-    const listing = await load(path);
-    if (!listing) return;
-    // 截断到当前列之前（如果点在非最右列），再 push
-    setColumnStack((stack) => {
-      // 找到 path 所在的列：如果 path 是某一列的 entries 里的，截断到该列，然后 push 新列
-      // 简化：始终在最后追加（点最右列的子目录）
-      const idx = stack.findIndex((l) => l.path === path);
-      if (idx >= 0) return stack.slice(0, idx + 1);
-      return [...stack, listing];
-    });
-    setSelectedPath(path);
+  // 点父列的某个目录 → 选中它，加载其内容到右列
+  const selectEntry = async (entry: DirectoryEntry) => {
+    setSelected(entry);
+    const listing = await load(entry.path);
+    setChild(listing);
   };
 
-  // 点面包屑 → 截断到该层级
+  // 点右列（子目录）里的某个目录 → 把它提升为父列，清空选中，右列消失
+  const advance = async (entry: DirectoryEntry) => {
+    const listing = await load(entry.path);
+    if (!listing) return;
+    setParent(listing);
+    setSelected(null);
+    setChild(null);
+  };
+
+  // 点面包屑 → 回到该层级
   const navigateTo = async (path: string) => {
-    const idx = columnStack.findIndex((l) => l.path === path);
-    if (idx >= 0) {
-      setColumnStack((s) => s.slice(0, idx + 1));
-      setSelectedPath(path);
-    } else {
-      const listing = await load(path);
-      if (listing) { setColumnStack([listing]); setSelectedPath(path); }
+    // 如果 path 是 parent 的 path，清空选中回到单列
+    if (parent && path === parent.path) {
+      setSelected(null);
+      setChild(null);
+      return;
     }
+    // 否则直接加载该路径为父目录
+    const listing = await load(path);
+    if (listing) { setParent(listing); setSelected(null); setChild(null); }
   };
 
   // 路径编辑：提交输入框里的路径
@@ -490,14 +494,14 @@ function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: an
     setPathDraft(null);
     if (p === '') return;
     const listing = await load(p);
-    if (listing) { setColumnStack([listing]); setSelectedPath(listing.path); }
+    if (listing) { setParent(listing); setSelected(null); setChild(null); }
   };
 
   const confirmCreate = async () => {
     const name = (folderDraft ?? '').trim();
     if (!name) return;
-    const current = columnStack[columnStack.length - 1];
-    const target = selectedPath ?? current?.path;
+    // 新建到「当前打开的目标」：优先选中的目录，否则父目录
+    const target = selected?.path ?? parent?.path;
     if (!target) return;
     setCreating(true);
     try {
@@ -506,7 +510,9 @@ function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: an
       setCreateError(null);
       const listing = await load(target);
       if (listing) {
-        setColumnStack((s) => { const copy = [...s]; copy[copy.length - 1] = listing; return copy; });
+        // 新建后刷新：如果新建在选中的子目录里，刷新 child；否则刷新 parent
+        if (selected && target === selected.path) setChild(listing);
+        else setParent(listing);
       }
     } catch (e) {
       setCreateError((e as Error).message || '新建文件夹失败');
@@ -515,10 +521,40 @@ function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: an
     }
   };
 
-  const crumbs = columnStack.length > 0 ? columnStack[columnStack.length - 1].crumbs : [];
-  const currentListing = columnStack[columnStack.length - 1];
-  // 「打开」目标：当前选中的目录（默认最后一列的 path）
-  const targetPath = selectedPath ?? currentListing?.path ?? null;
+  // 面包屑：显示当前最深层的 crumbs（选中子目录时用 child 的 crumbs，否则 parent 的）
+  const crumbs = (selected && child ? child.crumbs : (parent?.crumbs ?? []));
+  // 路径编辑的当前目录
+  const currentDir = selected?.path ?? parent?.path ?? '';
+  // 「打开」目标：当前选中的目录，否则父目录
+  const targetPath = selected?.path ?? parent?.path ?? null;
+
+  // 单列渲染函数
+  const renderColumn = (listing: DirectoryListing, isChildCol: boolean) => {
+    return jsxs('div', { role: 'list', style: { flex: '1 1 0', minWidth: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }, children: [
+      ...listing.entries.filter((e) => showHidden || !e.hidden).map((e) => {
+        const isSel = selected?.path === e.path;
+        return jsxs('button', {
+          type: 'button',
+          key: e.path,
+          role: 'listitem',
+          onClick: () => isChildCol ? advance(e) : selectEntry(e),
+          style: {
+            display: 'flex', alignItems: 'center', gap: 4, width: '100%', height: 28,
+            background: isSel ? 'var(--dsw-alias-interactive-bg-active, var(--dsw-alias-interactive-bg-hover))' : 'transparent',
+            border: 'none', borderRadius: 6, cursor: 'pointer', padding: 4, textAlign: 'left',
+          },
+          children: [
+            isSel
+              ? jsx(IconFolderOpen16, { size: 16, style: { color: 'var(--dsw-alias-button-info-fill)', flex: 'none' } })
+              : jsx(IconFolderClose16, { size: 16, style: { color: 'var(--dsw-alias-label-secondary)', flex: 'none' } }),
+            jsx('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--dsw-alias-label-primary)', fontSize: 13, fontWeight: 500 }, children: e.name }),
+            jsx(IconChevronRightOutline14, { size: 12, style: { color: 'var(--dsw-alias-label-tertiary)', flex: 'none' } }),
+          ],
+        });
+      }),
+      listing.entries.filter((e) => showHidden || !e.hidden).length === 0 && jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12, padding: '8px 4px' }, children: '（空目录）' }),
+    ] });
+  };
 
   return jsxs(Modal, {
     open,
@@ -539,7 +575,7 @@ function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: an
                 i > 0 && jsx(IconChevronRightOutline14, { size: 12, style: { color: 'var(--dsw-alias-label-tertiary)', flex: 'none' } }),
                 jsx('button', { type: 'button', onClick: () => navigateTo(c.path), style: { background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, fontWeight: 500, padding: 0, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: c.name }),
               ] })),
-              jsx('button', { type: 'button', title: '编辑路径', onClick: () => { const cur = currentListing?.path ?? ''; const sep = cur.includes('/') ? '/' : '\\'; setPathDraft(cur.endsWith(sep) ? cur : cur + sep); requestAnimationFrame(() => pathInputRef.current?.focus()); }, style: { display: 'inline-flex', alignItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-tertiary)', padding: 2, marginLeft: 4, flex: 'none' }, children: jsx(IconEditOutline16, { size: 14 }) }),
+              jsx('button', { type: 'button', title: '编辑路径', onClick: () => { const sep = currentDir.includes('/') ? '/' : '\\'; setPathDraft(currentDir.endsWith(sep) ? currentDir : currentDir + sep); requestAnimationFrame(() => pathInputRef.current?.focus()); }, style: { display: 'inline-flex', alignItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-tertiary)', padding: 2, marginLeft: 4, flex: 'none' }, children: jsx(IconEditOutline16, { size: 14 }) }),
             ] })
           : jsx('input', {
               ref: pathInputRef,
@@ -553,43 +589,22 @@ function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: an
             }),
       ] }),
 
-      // content：Miller 多列
-      jsxs('div', { style: { display: 'flex', flex: 1, gap: 12, padding: '16px 16px 16px 24px', minHeight: 0, overflowX: 'auto' }, children: [
-        ...columnStack.map((listing, colIdx) => jsxs(React.Fragment, { key: listing.path, children: [
-          colIdx > 0 && jsx('span', { style: { width: 1, flex: 'none', background: 'var(--dsw-alias-border-l3)' } }),
-          jsxs('div', { role: 'list', style: { flex: '1 1 0', minWidth: 256, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, paddingRight: 8 }, children: [
-            ...listing.entries.filter((e) => showHidden || !e.hidden).map((e) => {
-              const selected = e.path === selectedPath;
-              return jsxs('button', {
-                type: 'button',
-                key: e.path,
-                role: 'listitem',
-                onClick: () => descend(e.path),
-                style: {
-                  display: 'flex', alignItems: 'center', gap: 4, width: '100%', height: 28,
-                  background: selected ? 'var(--dsw-alias-interactive-bg-active, var(--dsw-alias-interactive-bg-hover))' : 'transparent',
-                  border: 'none', borderRadius: 6, cursor: 'pointer', padding: 4, textAlign: 'left',
-                },
-                children: [
-                  selected
-                    ? jsx(IconFolderOpen16, { size: 16, style: { color: 'var(--dsw-alias-button-info-fill)', flex: 'none' } })
-                    : jsx(IconFolderClose16, { size: 16, style: { color: 'var(--dsw-alias-label-secondary)', flex: 'none' } }),
-                  jsx('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--dsw-alias-label-primary)', fontSize: 13, fontWeight: 500 }, children: e.name }),
-                  jsx(IconChevronRightOutline14, { size: 12, style: { color: 'var(--dsw-alias-label-tertiary)', flex: 'none' } }),
-                ],
-              });
-            }),
-            listing.entries.filter((e) => showHidden || !e.hidden).length === 0 && jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12, padding: '8px 4px' }, children: '（空目录）' }),
-          ] }),
-        ] })),
-        columnStack.length === 0 && jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '24px' }, children: '加载目录…' }),
+      // content：两列（父列 + 选中的子列）
+      jsxs('div', { style: { display: 'flex', flex: 1, gap: 12, padding: '16px 24px', minHeight: 0, overflow: 'hidden' }, children: [
+        parent === null
+          ? jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '24px 0' }, children: '加载目录…' })
+          : renderColumn(parent, false),
+        selected !== null && jsx('span', { style: { width: 1, flex: 'none', background: 'var(--dsw-alias-border-l3)' } }),
+        selected !== null && (child === null
+          ? jsx('div', { style: { flex: '1 1 0', color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '24px 0' }, children: '加载目录…' })
+          : renderColumn(child, true)),
       ] }),
 
       error && jsx('div', { role: 'alert', style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12, padding: '4px 24px' }, children: error }),
 
       // footer：新建文件夹 + 显示隐藏 + 取消 + 打开
       jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '16px 24px', borderTop: '1px solid var(--dsw-alias-border-l3)', flex: 'none' }, children: [
-        jsx(Button, { variant: 'outline', size: 'sm', icon: jsx(IconPlusOutline16, { size: 14 }), disabled: columnStack.length === 0, onClick: () => { setFolderDraft(''); setCreateError(null); }, children: '新建文件夹' }),
+        jsx(Button, { variant: 'outline', size: 'sm', icon: jsx(IconPlusOutline16, { size: 14 }), disabled: parent === null, onClick: () => { setFolderDraft(''); setCreateError(null); }, children: '新建文件夹' }),
         jsxs('button', { type: 'button', 'aria-pressed': showHidden, onClick: () => setShowHidden((v) => !v), style: { display: 'inline-flex', alignItems: 'center', gap: 4, background: 'transparent', border: 'none', cursor: 'pointer', color: showHidden ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)', fontSize: 13, fontWeight: 500, padding: 0, whiteSpace: 'nowrap' }, children: [
           '显示隐藏文件',
           showHidden && jsx(IconCheckOutline16, { size: 14 }),
