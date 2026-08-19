@@ -329,7 +329,7 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
         children: [
           jsx('button', {
             type: 'button',
-            title: '搜索',
+            title: '搜索会话',
             onClick: (e: React.MouseEvent) => { e.stopPropagation(); setAddFlowOpen(false); setSearchExpanded(true); requestAnimationFrame(() => searchInputRef.current?.focus()); },
             style: iconBtnStyle,
             children: jsx(IconSearchOutline16, { size: searchExpanded ? 11 : 14 }),
@@ -339,7 +339,7 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
             value: query,
             onChange: (e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value),
             onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Escape') { setQuery(''); setSearchExpanded(false); } },
-            placeholder: '搜索会话...',
+            placeholder: '搜索会话…',
             style: {
               flex: 1, minWidth: 0,
               width: searchExpanded ? 'auto' : 0,
@@ -350,7 +350,7 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
               transition: 'opacity .12s ease',
             },
           }),
-          searchExpanded && jsx('button', { type: 'button', title: '清除', onClick: (e: React.MouseEvent) => { e.stopPropagation(); setQuery(''); setSearchExpanded(false); }, style: iconBtnStyle, children: jsx(IconCloseFill14, {}) }),
+          searchExpanded && jsx('button', { type: 'button', title: '清除搜索', onClick: (e: React.MouseEvent) => { e.stopPropagation(); setQuery(''); setSearchExpanded(false); }, style: iconBtnStyle, children: jsx(IconCloseFill14, {}) }),
         ],
       }),
 
