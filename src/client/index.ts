@@ -145,6 +145,13 @@ const sessionRowStyle: CSSProperties = {
   fontSize: 13, padding: '5px 8px 5px 30px', borderRadius: 8, textAlign: 'left',
   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
 };
+// header 图标按钮（搜索/视图/添加），对齐原生 iconButton
+const iconBtnStyle: CSSProperties = {
+  cursor: 'pointer', width: 28, height: 28, flex: 'none',
+  color: 'var(--dsw-alias-label-secondary)', background: 'transparent',
+  border: 'none', borderRadius: '50%', display: 'inline-flex',
+  justifyContent: 'center', alignItems: 'center', padding: 0, fontSize: 16,
+};
 
 function WorkspaceItem({ workspace, sessions, onOpen, onDelete }: { workspace: WorkspaceDir; sessions: SessionSummary[]; onOpen: (id: string) => void; onDelete: () => void }) {
   const [expanded, setExpanded] = React.useState(false);
@@ -183,7 +190,11 @@ function WorkspaceBrowser({ ctx, identity, sessions, onChanged }: { ctx: any; id
   const [query, setQuery] = React.useState('');
   const [workspaces, setWorkspaces] = React.useState<WorkspaceDir[]>([]);
   const [loadingW, setLoadingW] = React.useState(true);
+  const [searchExpanded, setSearchExpanded] = React.useState(false);
+  const [adding, setAdding] = React.useState(false);
   const [newName, setNewName] = React.useState('');
+  const [addError, setAddError] = React.useState<string | null>(null);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
 
   const reload = React.useCallback(() => {
     if (!identity.userId) { setWorkspaces([]); setLoadingW(false); return; }
@@ -198,10 +209,14 @@ function WorkspaceBrowser({ ctx, identity, sessions, onChanged }: { ctx: any; id
 
   const createWorkspace = async () => {
     const name = newName.trim();
-    if (!name) return;
+    if (!name) { setAddError('请输入工作区名称'); return; }
     const r = await api('POST', '/api/mu/me/workspaces', { name });
-    if (r.json.ok) { setNewName(''); reload(); onChanged(); }
-    else alert(r.json.error || '创建失败');
+    if (r.json.ok) {
+      setNewName(''); setAdding(false); setAddError(null);
+      reload(); onChanged();
+    } else {
+      setAddError(r.json.error || '创建失败');
+    }
   };
 
   const deleteWorkspace = async (w: WorkspaceDir) => {
@@ -215,27 +230,49 @@ function WorkspaceBrowser({ ctx, identity, sessions, onChanged }: { ctx: any; id
   const shown = q ? workspaces.filter((w) => w.name.toLowerCase().includes(q)) : workspaces;
 
   return jsxs('div', { style: { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', padding: '0 4px' }, children: [
-    jsx('input', {
-      value: query,
-      onChange: (e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value),
-      placeholder: '搜索工作区',
-      style: {
-        width: '100%', boxSizing: 'border-box', margin: '4px 0 8px',
-        padding: '6px 10px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2)',
-        background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)',
-        fontSize: 13, outline: 'none',
-      },
-    }),
-    jsxs('div', { style: { display: 'flex', gap: 4, marginBottom: 8 }, children: [
-      jsx('input', {
-        value: newName,
-        onChange: (e: React.ChangeEvent<HTMLInputElement>) => setNewName(e.target.value),
-        onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') createWorkspace(); },
-        placeholder: '新建工作区名称',
-        style: { flex: 1, boxSizing: 'border-box', padding: '6px 10px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2)', background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', fontSize: 13, outline: 'none' },
-      }),
-      jsx('button', { onClick: createWorkspace, style: primaryBtnStyle, children: '＋' }),
+    // header：左侧「工作区」文字，右侧 搜索 / 视图 / 添加 三按钮（对齐原生）
+    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 4, height: 36, margin: '2px -4px 4px', padding: '0 4px' }, children: [
+      jsx('span', { style: { flex: 'none', maxWidth: '45%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--dsw-alias-label-tertiary)', lineHeight: '20px' }, children: '工作区' }),
+
+      // 搜索（点击展开）
+      searchExpanded
+        ? jsxs('div', { style: { flex: 1, display: 'flex', alignItems: 'center', gap: 4, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10, height: 30, padding: '0 4px 0 8px' }, children: [
+            jsx('input', {
+              ref: searchInputRef,
+              value: query,
+              autoFocus: true,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value),
+              onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Escape') { setQuery(''); setSearchExpanded(false); } },
+              placeholder: '搜索工作区',
+              style: { flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--dsw-alias-label-primary)', fontSize: 13 },
+            }),
+            jsx('button', { type: 'button', onClick: () => { setQuery(''); setSearchExpanded(false); }, style: iconBtnStyle, children: '×' }),
+          ] })
+        : jsx('button', { type: 'button', title: '搜索', onClick: () => setSearchExpanded(true), style: iconBtnStyle, children: '⌕' }),
+
+      // 视图（分组/排序；专属目录扫描下为占位，保留对齐原生三按钮）
+      jsx('button', { type: 'button', title: '视图', onClick: () => reload(), style: iconBtnStyle, children: '≡' }),
+
+      // 添加（点击展开输入框）
+      jsx('button', { type: 'button', title: '新建工作区', onClick: () => { setAdding((v) => !v); setAddError(null); }, style: iconBtnStyle, children: '＋' }),
     ] }),
+
+    // 添加工作区的内联输入框
+    adding && jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }, children: [
+      jsxs('div', { style: { display: 'flex', gap: 4 }, children: [
+        jsx('input', {
+          value: newName,
+          autoFocus: true,
+          onChange: (e: React.ChangeEvent<HTMLInputElement>) => setNewName(e.target.value),
+          onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') createWorkspace(); if (e.key === 'Escape') setAdding(false); },
+          placeholder: '工作区名称',
+          style: { flex: 1, boxSizing: 'border-box', padding: '6px 10px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2)', background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', fontSize: 13, outline: 'none' },
+        }),
+        jsx('button', { onClick: createWorkspace, style: primaryBtnStyle, children: '创建' }),
+      ] }),
+      addError && jsx('div', { style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12 }, children: addError }),
+    ] }),
+
     jsx('div', { style: { flex: 1, overflowY: 'auto', minHeight: 0 }, children: [
       loadingW
         ? jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '12px 8px', textAlign: 'center' }, children: '加载中…' })
@@ -246,7 +283,7 @@ function WorkspaceBrowser({ ctx, identity, sessions, onChanged }: { ctx: any; id
             onOpen: (id: string) => { if (ctx.sessions?.open) ctx.sessions.open(id); },
             onDelete: () => deleteWorkspace(w),
           })),
-      !loadingW && shown.length === 0 && jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '12px 8px', textAlign: 'center' }, children: '暂无工作区，请在上方新建' }),
+      !loadingW && shown.length === 0 && jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '12px 8px', textAlign: 'center' }, children: '暂无工作区，点击右上角 ＋ 新建' }),
     ] }),
   ] });
 }
@@ -269,7 +306,7 @@ export function apply(ctx: any): void {
     });
   }));
 
-  // 退出登录入口（sidebar.settings 下追加，或 settings.action；这里用 settings.action list）
+  // 退出登录入口（settings.action list，右上角按钮）
   ctx.slots.inject('settings.action', () => ctx.slots.register({
     name: 'settings.action',
     id: 'multi-user-logout',
@@ -283,7 +320,13 @@ export function apply(ctx: any): void {
         await api('POST', '/api/mu/auth/logout');
         location.href = '/';
       },
-      style: { cursor: 'pointer', color: 'var(--dsw-alias-state-error-primary)', background: 'transparent', border: 'none', fontSize: 12, padding: '6px 10px' },
+      style: {
+        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+        height: 32, padding: '0 12px', borderRadius: 8,
+        border: '1px solid var(--dsw-alias-state-error-primary)',
+        background: 'transparent', color: 'var(--dsw-alias-state-error-primary)',
+        fontSize: 12, fontWeight: 500,
+      },
       children: `退出登录（${identity.username ?? ''}）`,
     });
   }));
