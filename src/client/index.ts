@@ -16,7 +16,7 @@
 import * as React from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import type { CSSProperties } from 'react';
-import { IconSearchOutline16, IconPersonalizationOutline16, IconProjectAddOutline16, IconCloseFill14, Button, Menu } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconSearchOutline16, IconPersonalizationOutline16, IconProjectAddOutline16, IconCloseFill14, IconFolderClose16, IconFolderOpen16, IconTriangleRightFill14, IconEllipsisOutline16, IconPlusOutline16, IconEditOutline16, IconTrashOutline16, Button, Menu } from '@deepseek-ai/dsh-client-ui-primitives';
 
 export const inject = ['slots', 'workspaces', 'sessions', 'locale'];
 
@@ -166,17 +166,18 @@ function filterWorkspaces(items: WorkspaceView[], identity: Identity): Workspace
 
 /* ---------------- UI 组件 ---------------- */
 
+// 对齐原生 ui-workspace 的行样式（Rows.module.css 尺寸）
 const workspaceRowStyle: CSSProperties = {
-  display: 'flex', alignItems: 'center', width: '100%',
-  background: 'transparent', border: 'none', cursor: 'pointer',
+  boxSizing: 'border-box', display: 'flex', alignItems: 'center', width: '100%',
+  height: 34, background: 'transparent', border: 'none', cursor: 'pointer',
   color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 14,
-  padding: '7px 8px', borderRadius: 8, textAlign: 'left',
+  padding: '0 8px', borderRadius: 8, gap: 6, textAlign: 'left',
 };
 const sessionRowStyle: CSSProperties = {
-  display: 'block', width: '100%', background: 'transparent', border: 'none',
-  cursor: 'pointer', color: 'var(--dsw-alias-label-secondary)', font: 'inherit',
-  fontSize: 13, padding: '5px 8px 5px 30px', borderRadius: 8, textAlign: 'left',
-  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  boxSizing: 'border-box', display: 'flex', alignItems: 'center', width: '100%',
+  height: 32, background: 'transparent', border: 'none', cursor: 'pointer',
+  color: 'var(--dsw-alias-label-primary)', font: 'inherit', fontSize: 14,
+  padding: '0 8px', borderRadius: 8, gap: 6, textAlign: 'left',
 };
 // header 图标按钮（搜索/视图/添加），对齐原生 iconButton
 const iconBtnStyle: CSSProperties = {
@@ -185,41 +186,87 @@ const iconBtnStyle: CSSProperties = {
   border: 'none', borderRadius: '50%', display: 'inline-flex',
   justifyContent: 'center', alignItems: 'center', padding: 0, fontSize: 16,
 };
+// 行内小图标按钮（hover 显示的菜单/加号），对齐原生
+const rowIconBtnStyle: CSSProperties = {
+  cursor: 'pointer', width: 28, height: 28, flex: 'none',
+  color: 'var(--dsw-alias-label-secondary)', background: 'transparent',
+  border: 'none', borderRadius: '50%', display: 'inline-flex',
+  justifyContent: 'center', alignItems: 'center', padding: 0,
+};
+// 图标槽位（文件夹/chevron），对齐原生 slot（16px 宽）
+const slotStyle: CSSProperties = {
+  width: 16, height: 20, flex: 'none',
+  display: 'inline-flex', justifyContent: 'center', alignItems: 'center',
+  color: 'var(--dsw-alias-label-tertiary)',
+};
 
-function WorkspaceItem({ workspace, sessions, onOpen, onDelete }: { workspace: WorkspaceView; sessions: SessionSummary[]; onOpen: (id: string) => void; onDelete: () => void }) {
+function SessionRow({ session, onOpen }: { session: SessionSummary; onOpen: (id: string) => void }) {
+  return jsxs('button', {
+    type: 'button',
+    onClick: () => onOpen(session.id),
+    style: { ...sessionRowStyle, paddingLeft: 30 },
+    children: [
+      jsx('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }, children: session.title || session.displayTitle || session.id }),
+    ],
+  });
+}
+
+function WorkspaceItem({ workspace, sessions, onOpen, onDelete, onRename, onStartSession }: { workspace: WorkspaceView; sessions: SessionSummary[]; onOpen: (id: string) => void; onDelete: () => void; onRename: () => void; onStartSession: () => void }) {
   const [expanded, setExpanded] = React.useState(false);
-  // 会话按 cwd 落在该工作区目录下过滤（工作区自带的 sessionIds 与 cwd 双保险）
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  // 会话按工作区自带的 sessionIds（原生已按 cwd 过滤）+ cwd 落在目录内双保险
   const members = sessions.filter((s) => (workspace.sessionIds.includes(s.id)) || (s.cwd && isUnder(workspace.path, s.cwd)));
+
+  const menuItems = [
+    { id: 'rename', label: '重命名', icon: jsx(IconEditOutline16, {}) },
+    { id: 'delete', label: '删除工作区', icon: jsx(IconTrashOutline16, {}), danger: true },
+  ];
+
   return jsxs('div', { style: { marginBottom: 2 }, children: [
-    jsxs('div', { style: { display: 'flex', alignItems: 'center', width: '100%' }, children: [
-      jsxs('button', {
-        type: 'button',
-        onClick: () => setExpanded((v) => !v),
-        style: { ...workspaceRowStyle, flex: 1, minWidth: 0 },
-        children: [
-          jsx('span', { style: { marginRight: 6 }, children: expanded ? '▾' : '▸' }),
-          jsx('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: workspace.title || workspace.path }),
-        ],
-      }),
-      jsx('button', {
-        type: 'button',
-        title: '删除工作区',
-        onClick: onDelete,
-        style: { background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '4px 6px', flex: 'none' },
-        children: '×',
-      }),
-    ] }),
-    expanded && members.map((s) => jsx('button', {
-      type: 'button',
-      key: s.id,
-      onClick: () => onOpen(s.id),
-      style: sessionRowStyle,
-      children: s.title || s.displayTitle || s.id,
-    })),
+    jsxs('div', {
+      role: 'treeitem',
+      'aria-expanded': expanded,
+      onClick: () => setExpanded((v) => !v),
+      style: workspaceRowStyle,
+      children: [
+        jsx('span', { style: slotStyle, children: expanded ? jsx(IconFolderOpen16, {}) : jsx(IconFolderClose16, {}) }),
+        jsx('span', { style: { ...slotStyle, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform .12s' }, children: jsx(IconTriangleRightFill14, {}) }),
+        jsx('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: workspace.title || workspace.path }),
+        // 右侧操作（hover 显示：重命名/删除菜单 + 新建会话）
+        jsxs('span', {
+          style: { display: 'flex', alignItems: 'center', gap: 0, flex: 'none' },
+          children: [
+            jsx(Menu, {
+              open: menuOpen,
+              onClose: () => setMenuOpen(false),
+              items: menuItems,
+              onSelect: (id: string) => { setMenuOpen(false); if (id === 'rename') onRename(); else if (id === 'delete') onDelete(); },
+              portal: true,
+              closeOnPointerLeave: true,
+              anchor: jsx('button', {
+                type: 'button',
+                'aria-label': `工作区 ${workspace.title || workspace.path} 操作`,
+                onClick: (e: React.MouseEvent) => { e.stopPropagation(); setMenuOpen((v) => !v); },
+                style: rowIconBtnStyle,
+                children: jsx(IconEllipsisOutline16, {}),
+              }),
+            }),
+            jsx('button', {
+              type: 'button',
+              'aria-label': '新建会话',
+              onClick: (e: React.MouseEvent) => { e.stopPropagation(); onStartSession(); },
+              style: rowIconBtnStyle,
+              children: jsx(IconPlusOutline16, {}),
+            }),
+          ],
+        }),
+      ],
+    }),
+    expanded && members.map((s) => jsx(SessionRow, { key: s.id, session: s, onOpen })),
   ] });
 }
 
-function WorkspaceBrowser({ ctx, identity, sessions, renderSlot }: { ctx: any; identity: Identity; sessions: SessionSummary[]; renderSlot?: any }) {
+function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Identity; sessions: SessionSummary[] }) {
   const workspaceSnap = useWorkspaceSnapshot(ctx);
   const [query, setQuery] = React.useState('');
   const [searchExpanded, setSearchExpanded] = React.useState(false);
@@ -245,6 +292,17 @@ function WorkspaceBrowser({ ctx, identity, sessions, renderSlot }: { ctx: any; i
       await ctx.workspaces.delete(w.workspaceId);
     } catch (err) {
       alert(`删除失败：${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const renameWorkspace = async (w: WorkspaceView) => {
+    const title = prompt('重命名工作区：', w.title || w.path);
+    if (title === null) return;
+    if (!title.trim()) return;
+    try {
+      await ctx.workspaces.rename(w.workspaceId, title.trim());
+    } catch (err) {
+      alert(`重命名失败：${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -325,16 +383,15 @@ function WorkspaceBrowser({ ctx, identity, sessions, renderSlot }: { ctx: any; i
       jsx('button', { ref: addBtnRef, type: 'button', title: '新建工作区', onClick: openAddFlow, style: iconBtnStyle, children: jsx(IconProjectAddOutline16, { size: 16 }) }),
     ] }),
 
-    // 目录选择流程（browse 目录选择器，由 directory-picker-browse 插件提供）
-    renderSlot && addFlowOpen && renderSlot('sidebar.workspaces.directoryFlow', {
-      open: addFlowOpen,
-      busy: false,
-      onPicked: async (path: string) => {
+    // 目录选择器（browse 能力：listDirectory/createDirectory）
+    addFlowOpen && jsx(DirectoryPicker, {
+      ctx,
+      initialPath: identity.workspaceRoot ?? undefined,
+      onPick: async (path: string) => {
         try { await ctx.workspaces.create({ path }); } catch (err) { alert(`添加工作区失败：${err instanceof Error ? err.message : String(err)}`); }
         closeAddFlow();
       },
       onCancel: closeAddFlow,
-      onError: (msg: string) => alert(msg),
     }),
 
     jsx('div', { style: { flex: 1, overflowY: 'auto', minHeight: 0 }, children: [
@@ -344,11 +401,107 @@ function WorkspaceBrowser({ ctx, identity, sessions, renderSlot }: { ctx: any; i
         sessions,
         onOpen: (id: string) => { if (ctx.sessions?.open) ctx.sessions.open(id); },
         onDelete: () => deleteWorkspace(w),
+        onRename: () => renameWorkspace(w),
+        onStartSession: () => { if (ctx.workspaces?.startSession) ctx.workspaces.startSession(w.workspaceId); },
       })),
-      shown.length === 0 && jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '12px 8px', textAlign: 'center' }, children: identity.loading ? '加载中…' : '暂无工作区，点击右上角 ＋ 添加目录' }),
+      shown.length === 0 && jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '12px 8px', textAlign: 'center' }, children: identity.loading ? '加载中…' : '暂无工作区，点击右上角添加目录' }),
     ] }),
   ] });
 }
+
+/* ---------------- 目录选择器（browse 能力） ---------------- */
+
+interface DirectoryEntry {
+  name: string;
+  path: string;
+  hidden?: boolean;
+}
+interface DirectoryListing {
+  path: string;
+  home: string;
+  crumbs: DirectoryEntry[];
+  entries: DirectoryEntry[];
+  truncated: boolean;
+}
+
+/** 轻量目录选择器：列目录 + 面包屑 + 新建文件夹 + 选择，用 browse 能力（listDirectory/createDirectory）。 */
+function DirectoryPicker({ ctx, initialPath, onPick, onCancel }: { ctx: any; initialPath?: string; onPick: (path: string) => void; onCancel: () => void }) {
+  const [listing, setListing] = React.useState<DirectoryListing | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [newName, setNewName] = React.useState('');
+  const [creating, setCreating] = React.useState(false);
+
+  const load = React.useCallback((path?: string) => {
+    setError(null);
+    ctx.workspaces.listDirectory(path).then(setListing).catch((e: Error) => setError(e.message || '无法列出目录'));
+  }, [ctx]);
+
+  React.useEffect(() => { load(initialPath); }, [load, initialPath]);
+
+  if (!listing) {
+    return jsxs('div', { style: pickerBoxStyle, children: [
+      error ? jsx('div', { style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12, marginBottom: 8 }, children: error }) : jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 13 }, children: '加载目录…' }),
+      jsx('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 }, children: jsx('button', { onClick: onCancel, style: btnStyle, children: '取消' }) }),
+    ] });
+  }
+
+  const createFolder = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    setCreating(true);
+    try {
+      await ctx.workspaces.createDirectory(listing.path, name);
+      setNewName('');
+      load(listing.path);
+    } catch (e) {
+      setError((e as Error).message || '新建文件夹失败');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return jsxs('div', { style: pickerBoxStyle, children: [
+    // 面包屑（crumbs → 上级目录）
+    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginBottom: 8 }, children: [
+      ...listing.crumbs.map((c, i) => jsxs(React.Fragment, { key: c.path, children: [
+        i > 0 && jsx('span', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12 }, children: '/' }),
+        jsx('button', { type: 'button', onClick: () => load(c.path), style: { background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-secondary)', fontSize: 12, padding: 2 }, children: c.name }),
+      ] })),
+    ] }),
+
+    // 子目录列表
+    jsx('div', { style: { maxHeight: 220, overflowY: 'auto', marginBottom: 8 }, children: [
+      listing.entries.filter((e) => !e.hidden).map((e) => jsx('button', {
+        type: 'button',
+        key: e.path,
+        onClick: () => load(e.path),
+        style: { display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-primary)', fontSize: 13, padding: '5px 8px', borderRadius: 6, textAlign: 'left' },
+        children: jsxs(React.Fragment, { children: [jsx(IconFolderClose16, {}), e.name] }),
+      })),
+      listing.entries.filter((e) => !e.hidden).length === 0 && jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12, padding: '8px' }, children: '（空目录）' }),
+    ] }),
+
+    // 新建文件夹
+    jsxs('div', { style: { display: 'flex', gap: 4, marginBottom: 8 }, children: [
+      jsx('input', { value: newName, onChange: (e: React.ChangeEvent<HTMLInputElement>) => setNewName(e.target.value), onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') createFolder(); }, placeholder: '新建文件夹名称', style: inputStyle }),
+      jsx('button', { onClick: createFolder, disabled: creating, style: btnStyle, children: '新建' }),
+    ] }),
+
+    error && jsx('div', { style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12, marginBottom: 8 }, children: error }),
+
+    // 操作按钮
+    jsxs('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 }, children: [
+      jsx('button', { onClick: onCancel, style: btnStyle, children: '取消' }),
+      jsx('button', { onClick: () => onPick(listing.path), style: primaryBtnStyle, children: `选择「${listing.crumbs[listing.crumbs.length - 1]?.name ?? listing.path}」` }),
+    ] }),
+  ] });
+}
+
+const pickerBoxStyle: CSSProperties = {
+  border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10,
+  padding: 10, marginBottom: 8,
+  background: 'var(--dsw-alias-bg-layer-1)',
+};
 
 /* ---------------- 插件 body ---------------- */
 
@@ -356,16 +509,14 @@ export function apply(ctx: any): void {
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
     name: 'sidebar.workspaces',
     priority: -1, // 低于官方 ui-workspace 的默认 0，shadow 原生浏览区（lowest renders）
-    // 注意：不声明 children（sidebar.workspaces.directoryFlow 已由官方 ui-workspace 声明）
     inject: () => ({}),
-  }, function FilteredBrowser(props: any) {
+  }, function FilteredBrowser() {
     const identity = useIdentity();
     const sessions = useSessionSnapshot(ctx);
     return jsx(WorkspaceBrowser, {
       ctx,
       identity,
       sessions,
-      renderSlot: props.renderSlot,
     });
   }));
 
