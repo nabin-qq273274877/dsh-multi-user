@@ -466,13 +466,11 @@ function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: an
     setChild(listing);
   };
 
-  // 点右列（子目录）里的某个目录 → 把它提升为父列，清空选中，右列消失
+  // 点右列（子目录）里的某个目录 → 右列整体提升为父列，再选中该目录展开其子目录（对齐原生 advance）
   const advance = async (entry: DirectoryEntry) => {
-    const listing = await load(entry.path);
-    if (!listing) return;
-    setParent(listing);
-    setSelected(null);
-    setChild(null);
+    if (child === null) return;
+    setParent(child);   // 右列提升为父列
+    await selectEntry(entry); // 选中 entry，右列展开其子目录
   };
 
   // 点面包屑 → 回到该层级
