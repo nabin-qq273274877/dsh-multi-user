@@ -16,7 +16,7 @@
 import * as React from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import type { CSSProperties } from 'react';
-import { IconSearchOutline16, IconPersonalizationOutline16, IconProjectAddOutline16, IconCloseFill14, IconFolderClose16, IconFolderOpen16, IconTriangleRightFill14, IconEllipsisOutline16, IconPlusOutline16, IconEditOutline16, IconTrashOutline16, Button, Menu } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconSearchOutline16, IconPersonalizationOutline16, IconProjectAddOutline16, IconCloseFill14, IconFolderClose16, IconFolderOpen16, IconTriangleRightFill14, IconEllipsisOutline16, IconPlusOutline16, IconEditOutline16, IconTrashOutline16, Button, Menu, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
 
 export const inject = ['slots', 'workspaces', 'sessions', 'locale'];
 
@@ -383,9 +383,10 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
       jsx('button', { ref: addBtnRef, type: 'button', title: '新建工作区', onClick: openAddFlow, style: iconBtnStyle, children: jsx(IconProjectAddOutline16, { size: 16 }) }),
     ] }),
 
-    // 目录选择器（browse 能力：listDirectory/createDirectory）
-    addFlowOpen && jsx(DirectoryPicker, {
+    // 目录选择器（browse 能力，Modal 弹出）
+    jsx(DirectoryPicker, {
       ctx,
+      open: addFlowOpen,
       initialPath: identity.workspaceRoot ?? undefined,
       onPick: async (path: string) => {
         try { await ctx.workspaces.create({ path }); } catch (err) { alert(`添加工作区失败：${err instanceof Error ? err.message : String(err)}`); }
@@ -409,7 +410,7 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
   ] });
 }
 
-/* ---------------- 目录选择器（browse 能力） ---------------- */
+/* ---------------- 目录选择器（browse 能力，Modal 弹出） ---------------- */
 
 interface DirectoryEntry {
   name: string;
@@ -424,34 +425,29 @@ interface DirectoryListing {
   truncated: boolean;
 }
 
-/** 轻量目录选择器：列目录 + 面包屑 + 新建文件夹 + 选择，用 browse 能力（listDirectory/createDirectory）。 */
-function DirectoryPicker({ ctx, initialPath, onPick, onCancel }: { ctx: any; initialPath?: string; onPick: (path: string) => void; onCancel: () => void }) {
+/** 目录选择模态框：面包屑 + 子目录列表 + 新建文件夹 + 选择（对齐原生 browse 选择器）。 */
+function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: any; open: boolean; initialPath?: string; onPick: (path: string) => void; onCancel: () => void }) {
   const [listing, setListing] = React.useState<DirectoryListing | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const [newName, setNewName] = React.useState('');
   const [creating, setCreating] = React.useState(false);
+  const [newFolderOpen, setNewFolderOpen] = React.useState(false);
+  const [newName, setNewName] = React.useState('');
 
   const load = React.useCallback((path?: string) => {
     setError(null);
     ctx.workspaces.listDirectory(path).then(setListing).catch((e: Error) => setError(e.message || '无法列出目录'));
   }, [ctx]);
 
-  React.useEffect(() => { load(initialPath); }, [load, initialPath]);
-
-  if (!listing) {
-    return jsxs('div', { style: pickerBoxStyle, children: [
-      error ? jsx('div', { style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12, marginBottom: 8 }, children: error }) : jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 13 }, children: '加载目录…' }),
-      jsx('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 }, children: jsx('button', { onClick: onCancel, style: btnStyle, children: '取消' }) }),
-    ] });
-  }
+  React.useEffect(() => { if (open) { setNewFolderOpen(false); setNewName(''); load(initialPath); } }, [open, load, initialPath]);
 
   const createFolder = async () => {
     const name = newName.trim();
-    if (!name) return;
+    if (!name || !listing) return;
     setCreating(true);
     try {
       await ctx.workspaces.createDirectory(listing.path, name);
       setNewName('');
+      setNewFolderOpen(false);
       load(listing.path);
     } catch (e) {
       setError((e as Error).message || '新建文件夹失败');
@@ -460,47 +456,60 @@ function DirectoryPicker({ ctx, initialPath, onPick, onCancel }: { ctx: any; ini
     }
   };
 
-  return jsxs('div', { style: pickerBoxStyle, children: [
-    // 面包屑（crumbs → 上级目录）
-    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginBottom: 8 }, children: [
-      ...listing.crumbs.map((c, i) => jsxs(React.Fragment, { key: c.path, children: [
-        i > 0 && jsx('span', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12 }, children: '/' }),
-        jsx('button', { type: 'button', onClick: () => load(c.path), style: { background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-secondary)', fontSize: 12, padding: 2 }, children: c.name }),
-      ] })),
+  const crumbs = listing?.crumbs ?? [];
+  const entries = (listing?.entries ?? []).filter((e) => !e.hidden);
+
+  return jsxs(Modal, {
+    open,
+    onClose: onCancel,
+    title: '选择目录',
+    closeLabel: '取消',
+    className: dirPickerModalStyle,
+    children: jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, minHeight: 280 }, children: [
+      // 面包屑
+      jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', padding: '2px 0' }, children: [
+        ...crumbs.map((c, i) => jsxs(React.Fragment, { key: c.path, children: [
+          i > 0 && jsx('span', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12, margin: '0 2px' }, children: '/' }),
+          jsx('button', { type: 'button', onClick: () => load(c.path), style: { background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-secondary)', fontSize: 13, padding: 2, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: c.name }),
+        ] })),
+      ] }),
+
+      // 当前路径
+      listing && jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12, fontFamily: 'var(--ds-font-family-code, monospace)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: listing.path }),
+
+      // 子目录列表
+      jsx('div', { style: { flex: 1, overflowY: 'auto', minHeight: 160, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 8, padding: 4 }, children: [
+        entries.length > 0
+          ? entries.map((e) => jsx('button', {
+              type: 'button',
+              key: e.path,
+              onClick: () => load(e.path),
+              style: { display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-primary)', fontSize: 13, padding: '5px 8px', borderRadius: 6, textAlign: 'left' },
+              children: jsxs(React.Fragment, { children: [jsx(IconFolderClose16, {}), jsx('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: e.name })] }),
+            }))
+          : jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12, padding: '16px', textAlign: 'center' }, children: '（空目录）' }),
+      ] }),
+
+      error && jsx('div', { style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12 }, children: error }),
     ] }),
-
-    // 子目录列表
-    jsx('div', { style: { maxHeight: 220, overflowY: 'auto', marginBottom: 8 }, children: [
-      listing.entries.filter((e) => !e.hidden).map((e) => jsx('button', {
-        type: 'button',
-        key: e.path,
-        onClick: () => load(e.path),
-        style: { display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-primary)', fontSize: 13, padding: '5px 8px', borderRadius: 6, textAlign: 'left' },
-        children: jsxs(React.Fragment, { children: [jsx(IconFolderClose16, {}), e.name] }),
-      })),
-      listing.entries.filter((e) => !e.hidden).length === 0 && jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12, padding: '8px' }, children: '（空目录）' }),
-    ] }),
-
-    // 新建文件夹
-    jsxs('div', { style: { display: 'flex', gap: 4, marginBottom: 8 }, children: [
-      jsx('input', { value: newName, onChange: (e: React.ChangeEvent<HTMLInputElement>) => setNewName(e.target.value), onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') createFolder(); }, placeholder: '新建文件夹名称', style: inputStyle }),
-      jsx('button', { onClick: createFolder, disabled: creating, style: btnStyle, children: '新建' }),
-    ] }),
-
-    error && jsx('div', { style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12, marginBottom: 8 }, children: error }),
-
-    // 操作按钮
-    jsxs('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 }, children: [
+    footer: jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 8, width: '100%' }, children: [
+      // 新建文件夹
+      newFolderOpen
+        ? jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 4, flex: 1 }, children: [
+            jsx('input', { value: newName, autoFocus: true, onChange: (e: React.ChangeEvent<HTMLInputElement>) => setNewName(e.target.value), onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') createFolder(); if (e.key === 'Escape') setNewFolderOpen(false); }, placeholder: '新建文件夹名称', style: { ...inputStyle, height: 32 } }),
+            jsx('button', { onClick: createFolder, disabled: creating, style: primaryBtnStyle, children: '创建' }),
+          ] })
+        : jsx('button', { onClick: () => setNewFolderOpen(true), style: btnStyle, children: '新建文件夹' }),
+      jsx('div', { style: { flex: 1 } }),
       jsx('button', { onClick: onCancel, style: btnStyle, children: '取消' }),
-      jsx('button', { onClick: () => onPick(listing.path), style: primaryBtnStyle, children: `选择「${listing.crumbs[listing.crumbs.length - 1]?.name ?? listing.path}」` }),
+      jsx('button', { onClick: () => listing && onPick(listing.path), disabled: !listing, style: primaryBtnStyle, children: '选择此目录' }),
     ] }),
-  ] });
+  });
 }
 
-const pickerBoxStyle: CSSProperties = {
-  border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10,
-  padding: 10, marginBottom: 8,
-  background: 'var(--dsw-alias-bg-layer-1)',
+const dirPickerModalStyle: CSSProperties = {
+  width: 'min(640px, 100%)',
+  maxHeight: 'min(520px, 100dvh - 32px)',
 };
 
 /* ---------------- 插件 body ---------------- */
