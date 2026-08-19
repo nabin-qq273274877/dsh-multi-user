@@ -16,7 +16,7 @@
 import * as React from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import type { CSSProperties } from 'react';
-import { IconSearchOutline16, IconPersonalizationOutline16, IconProjectAddOutline16, Button } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconSearchOutline16, IconPersonalizationOutline16, IconProjectAddOutline16, IconCloseFill14, Button, Menu } from '@deepseek-ai/dsh-client-ui-primitives';
 
 export const inject = ['slots', 'workspaces', 'sessions', 'locale'];
 
@@ -219,28 +219,25 @@ function WorkspaceItem({ workspace, sessions, onOpen, onDelete }: { workspace: W
   ] });
 }
 
-function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Identity; sessions: SessionSummary[] }) {
+function WorkspaceBrowser({ ctx, identity, sessions, renderSlot }: { ctx: any; identity: Identity; sessions: SessionSummary[]; renderSlot?: any }) {
   const workspaceSnap = useWorkspaceSnapshot(ctx);
   const [query, setQuery] = React.useState('');
   const [searchExpanded, setSearchExpanded] = React.useState(false);
+  const [groupBy, setGroupBy] = React.useState<'workspace' | 'flat'>('workspace');
+  const [orderBy, setOrderBy] = React.useState<'manual' | 'updated'>('updated');
+  const [viewMenuOpen, setViewMenuOpen] = React.useState(false);
+  const [addFlowOpen, setAddFlowOpen] = React.useState(false);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const addBtnRef = React.useRef<HTMLButtonElement>(null);
 
   const filtered = filterWorkspaces(workspaceSnap.items || [], identity);
   const q = query.trim().toLowerCase();
   const shown = q ? filtered.filter((w) => (w.title || '').toLowerCase().includes(q) || (w.path || '').toLowerCase().includes(q)) : filtered;
+  if (orderBy === 'updated') shown.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
 
-  // 新建工作区：原生目录选择器选任意目录 → createWorkspace（照抄原生交互）
-  const addWorkspace = async () => {
-    try {
-      const path = ctx.workspaces?.pickDirectory
-        ? await ctx.workspaces.pickDirectory()
-        : prompt('请输入要添加为工作区的目录绝对路径：', '');
-      if (!path) return;
-      await ctx.workspaces.create({ path });
-    } catch (err) {
-      alert(`添加工作区失败：${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
+  // 新建工作区：打开 browse 目录选择器（renderSlot directoryFlow），选完 createWorkspace
+  const openAddFlow = () => { setViewMenuOpen(false); setAddFlowOpen(true); };
+  const closeAddFlow = () => setAddFlowOpen(false);
 
   const deleteWorkspace = async (w: WorkspaceView) => {
     if (!confirm(`删除工作区「${w.title || w.path}」？仅移除工作区记录，目录与会话数据保留。`)) return;
@@ -252,32 +249,93 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
   };
 
   return jsxs('div', { style: { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', padding: '0 4px' }, children: [
-    // header：左侧「工作区」文字，右侧 搜索/视图/添加 三按钮（对齐原生 iconButton）
-    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 4, height: 36, margin: '2px -4px 4px', padding: '0 4px', justifyContent: 'flex-end' }, children: [
-      jsx('span', { style: { flex: 'none', maxWidth: '45%', marginRight: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--dsw-alias-label-tertiary)', lineHeight: '20px' }, children: '工作区' }),
+    // header：左侧「工作区」文字，右侧 搜索/视图/添加 三按钮（对齐原生）
+    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 4, height: 36, margin: '2px -4px 4px', padding: '0 4px' }, children: [
+      jsx('span', { style: { flex: 'none', maxWidth: '45%', marginRight: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--dsw-alias-label-tertiary)', lineHeight: '20px' }, children: groupBy === 'flat' ? '会话' : '工作区' }),
 
-      // 搜索（点击展开，带过渡）
-      searchExpanded
-        ? jsxs('div', { style: { flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 4, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 10, height: 30, padding: '0 4px 0 8px', transition: 'width .18s ease' }, children: [
-            jsx('input', {
-              ref: searchInputRef,
-              value: query,
-              autoFocus: true,
-              onChange: (e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value),
-              onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Escape') { setQuery(''); setSearchExpanded(false); } },
-              placeholder: '搜索会话...',
-              style: { flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: 'var(--dsw-alias-label-primary)', fontSize: 13 },
-            }),
-            jsx('button', { type: 'button', title: '清除', onClick: () => { setQuery(''); setSearchExpanded(false); }, style: iconBtnStyle, children: '×' }),
-          ] })
-        : jsx('button', { type: 'button', title: '搜索', onClick: () => { setSearchExpanded(true); requestAnimationFrame(() => searchInputRef.current?.focus()); }, style: iconBtnStyle, children: jsx(IconSearchOutline16, { size: 14 }) }),
+      // 搜索：同一容器，放大镜始终在左，输入框 width 0→100% 过渡（照抄原生）
+      jsxs('div', {
+        onClick: () => { setAddFlowOpen(false); setSearchExpanded(true); requestAnimationFrame(() => searchInputRef.current?.focus()); },
+        style: {
+          flex: searchExpanded ? 1 : 'none',
+          minWidth: 0,
+          display: 'flex', alignItems: 'center',
+          height: searchExpanded ? 30 : 28,
+          width: searchExpanded ? '100%' : 28,
+          border: searchExpanded ? '1px solid var(--dsw-alias-border-l2)' : 'none',
+          borderRadius: searchExpanded ? 10 : '50%',
+          padding: searchExpanded ? '0 4px 0 4px' : 0,
+          overflow: 'hidden',
+          transition: 'width .18s ease, padding .18s ease, border-color .18s ease',
+        },
+        children: [
+          jsx('button', {
+            type: 'button',
+            title: '搜索',
+            onClick: (e: React.MouseEvent) => { e.stopPropagation(); setAddFlowOpen(false); setSearchExpanded(true); requestAnimationFrame(() => searchInputRef.current?.focus()); },
+            style: iconBtnStyle,
+            children: jsx(IconSearchOutline16, { size: searchExpanded ? 11 : 14 }),
+          }),
+          jsx('input', {
+            ref: searchInputRef,
+            value: query,
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value),
+            onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Escape') { setQuery(''); setSearchExpanded(false); } },
+            placeholder: '搜索会话...',
+            style: {
+              flex: 1, minWidth: 0,
+              width: searchExpanded ? 'auto' : 0,
+              opacity: searchExpanded ? 1 : 0,
+              pointerEvents: searchExpanded ? 'auto' : 'none',
+              background: 'transparent', border: 'none', outline: 'none',
+              color: 'var(--dsw-alias-label-primary)', fontSize: 13, lineHeight: '18px',
+              transition: 'opacity .12s ease',
+            },
+          }),
+          searchExpanded && jsx('button', { type: 'button', title: '清除', onClick: (e: React.MouseEvent) => { e.stopPropagation(); setQuery(''); setSearchExpanded(false); }, style: iconBtnStyle, children: jsx(IconCloseFill14, {}) }),
+        ],
+      }),
 
-      // 视图（分组/排序菜单；简化为刷新，保留对齐原生）
-      jsx('button', { type: 'button', title: '视图', onClick: () => {}, style: iconBtnStyle, children: jsx(IconPersonalizationOutline16, {}) }),
+      // 视图：分组/排序菜单（照抄 ViewOptionsMenu）
+      jsx(Menu, {
+        open: viewMenuOpen,
+        onClose: () => setViewMenuOpen(false),
+        align: 'end',
+        dense: true,
+        portal: true,
+        selectedIds: [groupBy, orderBy],
+        items: [
+          { type: 'label', id: 'group-by', text: '分组' },
+          { id: 'workspace', label: '按工作区' },
+          { id: 'flat', label: '平铺会话' },
+          { type: 'separator', id: 'order-by-sep' },
+          { type: 'label', id: 'order-by', text: '排序' },
+          { id: 'manual', label: '手动' },
+          { id: 'updated', label: '最近更新' },
+        ],
+        onSelect: (id: string) => {
+          if (id === 'workspace' || id === 'flat') setGroupBy(id);
+          else if (id === 'manual' || id === 'updated') setOrderBy(id);
+          setViewMenuOpen(false);
+        },
+        anchor: jsx('button', { type: 'button', title: '视图', onClick: () => setViewMenuOpen((v) => !v), style: iconBtnStyle, children: jsx(IconPersonalizationOutline16, {}) }),
+      }),
 
-      // 添加（原生目录选择器）
-      jsx('button', { type: 'button', title: '新建工作区', onClick: addWorkspace, style: iconBtnStyle, children: jsx(IconProjectAddOutline16, { size: 16 }) }),
+      // 添加：打开目录选择器（browse）
+      jsx('button', { ref: addBtnRef, type: 'button', title: '新建工作区', onClick: openAddFlow, style: iconBtnStyle, children: jsx(IconProjectAddOutline16, { size: 16 }) }),
     ] }),
+
+    // 目录选择流程（browse 目录选择器，由 directory-picker-browse 插件提供）
+    renderSlot && addFlowOpen && renderSlot('sidebar.workspaces.directoryFlow', {
+      open: addFlowOpen,
+      busy: false,
+      onPicked: async (path: string) => {
+        try { await ctx.workspaces.create({ path }); } catch (err) { alert(`添加工作区失败：${err instanceof Error ? err.message : String(err)}`); }
+        closeAddFlow();
+      },
+      onCancel: closeAddFlow,
+      onError: (msg: string) => alert(msg),
+    }),
 
     jsx('div', { style: { flex: 1, overflowY: 'auto', minHeight: 0 }, children: [
       shown.map((w) => jsx(WorkspaceItem, {
@@ -298,14 +356,16 @@ export function apply(ctx: any): void {
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
     name: 'sidebar.workspaces',
     priority: -1, // 低于官方 ui-workspace 的默认 0，shadow 原生浏览区（lowest renders）
+    // 注意：不声明 children（sidebar.workspaces.directoryFlow 已由官方 ui-workspace 声明）
     inject: () => ({}),
-  }, function FilteredBrowser() {
+  }, function FilteredBrowser(props: any) {
     const identity = useIdentity();
     const sessions = useSessionSnapshot(ctx);
     return jsx(WorkspaceBrowser, {
       ctx,
       identity,
       sessions,
+      renderSlot: props.renderSlot,
     });
   }));
 
