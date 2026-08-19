@@ -47,27 +47,18 @@ npx @deepseek-ai/dsh plugin --profile web add link:/path/to/dsh-multi-user
 
 本包通过 `package.json` 的 `dsh.bundle.patch` 自动挂载 Host 行，Client 半由 `dsh.client` 字段被 `@deepseek-ai/dsh-client-modules` 扫进 `window.__DSH_BOOT__`，无需手动改 `cordis.patch.yml`。
 
-### 让 AI 帮你安装
+或者直接复制以下提示词给 AI：
 
-不想手动敲命令？把下面这段整段复制给你的 AI 助手即可：
+```
+请帮我安装 dsh-multi-user 插件，仓库地址：https://github.com/nabin-qq273274877/dsh-multi-user
+按照 README 中的说明进行安装和配置。
+```
 
-````markdown
-请帮我把 `dsh-multi-user` 插件安装到本机的 DeepSeek Harness Web profile（profile 名 `web`），并完成验证。请严格按以下顺序执行：
+然后重启 `dsh web` 并刷新页面。
 
-1. 先定位本地 dsh-multi-user 仓库路径（若我尚未 clone，请执行：
-   `git clone https://github.com/nabin-qq273274877/dsh-multi-user.git`）。
-2. 进入该目录，执行 `pnpm install`，再执行 `pnpm run build`，确保 `lib/index.js` 与 `lib/client.js` 已生成。
-3. 用 `dsh plugin` 命令把本地路径链接进 profile（本地开发方式）：
-   `npx @deepseek-ai/dsh plugin --profile web add link:/path/to/dsh-multi-user`
-   （若希望从 npm 或 GitHub 安装，改用 `add dsh-multi-user` 或 `add github:nabin-qq273274877/dsh-multi-user`。）
-4. 确认 profile 的 `cordis.patch.yml` 里已包含 `dsh-multi-user` 的 insert 行（本包通过 `dsh.bundle.patch` 自动挂载，通常无需手动编辑，但请检查确认）。
-5. 重启 `dsh web`，然后访问 `http://127.0.0.1:3080/` 验证：应出现「初始化」页或「登录」页，而非直接进入 DSH。
+## 界面
 
-注意事项：
-- 不要执行 `git push`，只做本地安装。
-- 遇到权限/沙箱限制时，先停下来向我说明需要哪一步，不要擅自扩大访问范围。
-- 完成后请报告：安装方式、profile 是否成功加载插件、以及首次访问 `/` 看到的是初始化页还是登录页。
-````
+<p align="center"><img src="docs/登录界面.png" alt="登录界面" width="640"></p>
 
 ## 卸载
 
