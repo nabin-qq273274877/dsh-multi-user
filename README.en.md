@@ -45,6 +45,28 @@ npx @deepseek-ai/dsh plugin --profile web add link:/path/to/dsh-multi-user
 
 Then restart `dsh web` and refresh the page. The Host row is auto-mounted via `dsh.bundle.patch`, and the Client half is scanned into `window.__DSH_BOOT__` via the `dsh.client` field — no manual `cordis.patch.yml` edits required.
 
+### Let an AI install it for you
+
+Don't want to type commands yourself? Copy this whole block to your AI assistant:
+
+````markdown
+Please install the `dsh-multi-user` plugin into this machine's DeepSeek Harness Web profile (profile name `web`) and verify it. Follow these steps strictly in order:
+
+1. Locate the local dsh-multi-user repo path (if it isn't cloned yet, run:
+   `git clone https://github.com/nabin-qq273274877/dsh-multi-user.git`).
+2. Enter that directory, run `pnpm install`, then `pnpm run build`, and confirm `lib/index.js` and `lib/client.js` were generated.
+3. Link the local path into the profile using `dsh plugin` (local dev):
+   `npx @deepseek-ai/dsh plugin --profile web add link:/path/to/dsh-multi-user`
+   (To install from npm or GitHub instead, use `add dsh-multi-user` or `add github:nabin-qq273274877/dsh-multi-user`.)
+4. Confirm the profile's `cordis.patch.yml` contains the `dsh-multi-user` insert row (this package auto-mounts via `dsh.bundle.patch`, so manual edits are usually unnecessary, but please verify).
+5. Restart `dsh web`, then visit `http://127.0.0.1:3080/` to verify: you should see the initialization page or the login page, not DSH directly.
+
+Notes:
+- Do NOT run `git push`; only install locally.
+- If you hit a permission/sandbox restriction, stop and tell me which step needs it; do not widen access on your own.
+- When done, report: install method, whether the profile loaded the plugin successfully, and whether the first visit to `/` shows the initialization page or the login page.
+````
+
 ## Uninstall
 
 ```bash
