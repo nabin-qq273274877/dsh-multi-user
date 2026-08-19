@@ -1,6 +1,6 @@
 {
   "name": "dsh-multi-user",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Single-process multi-user workspace view partitioning for DeepSeek Harness: JWT-in-cookie login wall, per-user workspace/session filtering, and admin user management.",
   "type": "module",
   "main": "lib/index.js",
