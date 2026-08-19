@@ -60,6 +60,8 @@ npx @deepseek-ai/dsh plugin --profile web add link:/path/to/dsh-multi-user
 
 <p align="center"><img src="docs/登录界面.png" alt="登录界面" width="640"></p>
 
+<p align="center"><img src="docs/用户列表.png" alt="用户列表" width="640"></p>
+
 ## 卸载
 
 ```bash

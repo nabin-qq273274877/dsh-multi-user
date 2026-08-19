@@ -58,6 +58,8 @@ Then restart `dsh web` and refresh the page.
 
 <p align="center"><img src="docs/登录界面.png" alt="Login screen" width="640"></p>
 
+<p align="center"><img src="docs/用户列表.png" alt="User list" width="640"></p>
+
 ## Uninstall
 
 ```bash
