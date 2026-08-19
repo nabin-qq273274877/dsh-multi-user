@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dsh-multi-user 产品需求文档（PRD）</title>
+<style>
+@font-face { font-family: 'Outfit'; src: url('./_shared/fonts/Outfit-Regular.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Outfit'; src: url('./_shared/fonts/Outfit-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'JetBrainsMono'; src: url('./_shared/fonts/JetBrainsMono-Regular.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'JetBrainsMono'; src: url('./_shared/fonts/JetBrainsMono-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+
+:root {
+  --bg: #F6F7FB;
+  --bg2: #FFFFFF;
+  --ink: #191D2E;
+  --muted: #5C637A;
+  --rule: #E4E7F1;
+  --accent: #4F46E5;
+  --accent2: #0EA5E9;
+  --ok: #0F9D6E;
+  --warn: #C2820A;
+  --danger: #D64550;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Outfit', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(720px 480px at 8% -4%, rgba(79,70,229,0.08), transparent 62%),
+    radial-gradient(640px 420px at 96% 6%, rgba(14,165,233,0.07), transparent 60%),
+    radial-gradient(900px 600px at 50% 110%, rgba(79,70,229,0.05), transparent 60%);
+}
+
+.wrap { max-width: 1220px; margin: 0 auto; padding: 0 28px 80px; display: grid; grid-template-columns: 216px minmax(0,1fr); gap: 44px; }
+
+/* ===================== TOC ===================== */
+.toc-col { grid-column: 1; grid-row: 2; display: block; min-width: 0; }
+.toc { position: sticky; top: 24px; max-height: calc(100vh - 48px); overflow-y: auto; padding: 18px 0 18px 4px; font-size: 0.83rem; }
+.toc .toc-title { font-weight: 700; letter-spacing: 0.06em; color: var(--muted); font-size: 0.72rem; text-transform: uppercase; margin-bottom: 10px; }
+.toc a { display: block; color: var(--muted); text-decoration: none; padding: 5px 10px; border-left: 2px solid transparent; border-radius: 0 6px 6px 0; line-height: 1.45; }
+.toc a:hover { color: var(--accent); background: rgba(79,70,229,0.06); }
+.toc a.lv2 { padding-left: 22px; font-size: 0.8rem; }
+.toc a.active { color: var(--accent); border-left-color: var(--accent); font-weight: 600; }
+
+/* ===================== Cover ===================== */
+.cover { padding: 72px 0 40px; border-bottom: 1px solid var(--rule); margin-bottom: 52px; grid-column: 1 / -1; grid-row: 1; }
+.cover .kicker { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+.cover h1 { font-size: clamp(1.9rem, 4vw, 2.9rem); line-height: 1.22; font-weight: 700; letter-spacing: -0.01em; max-width: 720px; }
+.cover h1 .en { background: linear-gradient(120deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.cover .subtitle { margin-top: 14px; font-size: 1.05rem; color: var(--muted); max-width: 680px; }
+.cover .meta { display: flex; flex-wrap: wrap; gap: 10px 26px; margin-top: 26px; font-size: 0.82rem; color: var(--muted); }
+.cover .meta span b { color: var(--ink); font-weight: 600; }
+.name-banner { margin-top: 30px; display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding: 16px 22px; border-radius: 12px; background: rgba(255,255,255,0.72); border: 1px solid rgba(79,70,229,0.22); backdrop-filter: blur(10px); }
+.name-banner .repo { font-family: 'JetBrainsMono', monospace; font-size: 1.25rem; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.name-banner .tag { font-size: 0.8rem; color: var(--muted); }
+
+/* ===================== Typography ===================== */
+main { min-width: 0; grid-column: 2; grid-row: 2; }
+h2 { font-size: 1.5rem; font-weight: 700; margin: 62px 0 8px; padding-bottom: 10px; border-bottom: 2px solid var(--rule); position: relative; }
+h2::before { content: ''; position: absolute; left: 0; bottom: -2px; width: 56px; height: 2px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+h2 .no { color: var(--accent); font-family: 'JetBrainsMono', monospace; font-size: 1.1rem; margin-right: 10px; }
+h3 { font-size: 1.13rem; font-weight: 700; margin: 34px 0 10px; }
+h3 .no { color: var(--accent); font-family: 'JetBrainsMono', monospace; font-size: 0.86rem; margin-right: 8px; }
+h4 { font-size: 0.98rem; font-weight: 700; margin: 22px 0 8px; color: var(--ink); }
+p { margin: 10px 0; color: var(--ink); }
+p.lead { font-size: 1.02rem; }
+ul.plain, ol.plain { margin: 10px 0 10px 22px; }
+ul.plain li, ol.plain li { margin: 5px 0; }
+mark.key { background: none; color: var(--accent); font-weight: 600; }
+code { font-family: 'JetBrainsMono', monospace; font-size: 0.86em; background: rgba(79,70,229,0.08); color: #4038B8; padding: 1px 6px; border-radius: 5px; word-break: break-all; }
+.dirtree { font-family: 'JetBrainsMono', monospace; font-size: 0.8rem; line-height: 1.9; background: var(--bg2); border: 1px solid var(--rule); border-radius: 12px; padding: 16px 20px; margin: 16px 0; overflow-x: auto; white-space: pre; color: var(--ink); }
+.dirtree .cm { color: var(--muted); }
+
+/* ===================== Callout & Cards ===================== */
+.callout { margin: 18px 0; padding: 16px 20px; border-radius: 12px; background: rgba(255,255,255,0.72); border: 1px solid var(--rule); border-left: 4px solid var(--accent); backdrop-filter: blur(10px); font-size: 0.94rem; }
+.callout.warn { border-left-color: var(--warn); }
+.callout .t { font-weight: 700; margin-bottom: 4px; }
+.card { background: rgba(255,255,255,0.78); border: 1px solid var(--rule); border-radius: 14px; padding: 20px 22px; margin: 14px 0; backdrop-filter: blur(10px); box-shadow: 0 2px 10px rgba(25,29,46,0.04); }
+
+/* ===================== Tables ===================== */
+.table-wrap { overflow: auto; max-height: 600px; margin: 16px 0; border: 1px solid var(--rule); border-radius: 12px; background: var(--bg2); }
+table { width: 100%; border-collapse: collapse; font-size: 0.88rem; min-width: 640px; }
+thead th { position: sticky; top: 0; background: #F2F3FA; text-align: left; font-weight: 700; color: var(--ink); padding: 10px 14px; border-bottom: 2px solid var(--rule); white-space: nowrap; }
+tbody td { padding: 10px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--ink); }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: rgba(79,70,229,0.035); }
+td .yes { color: var(--ok); font-weight: 700; }
+td .no-x { color: var(--muted); }
+.mono { font-family: 'JetBrainsMono', monospace; font-size: 0.84rem; }
+
+/* ===================== Figures / Diagrams ===================== */
+figure.diagram { margin: 22px 0; text-align: center; }
+.svgbox { background: var(--bg2); border: 1px solid var(--rule); border-radius: 12px; padding: 14px 10px; overflow-x: auto; }
+.svgbox svg { width: 100%; min-width: 720px; height: auto; display: block; }
+figure.diagram figcaption, figure.proto figcaption { font-size: 0.8rem; color: var(--muted); margin-top: 8px; }
+
+/* ===================== Interactive Demo Frames ===================== */
+figure.proto { margin: 22px 0; }
+.proto-frame { border: 1px solid rgba(79,70,229,0.25); border-radius: 16px; overflow: hidden; background: var(--bg2); box-shadow: 0 6px 24px rgba(25,29,46,0.07); }
+.proto-chrome { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: #EEF0F9; border-bottom: 1px solid var(--rule); }
+.proto-chrome .dot { width: 10px; height: 10px; border-radius: 50%; background: #C9CDE0; }
+.proto-chrome .url { font-family: 'JetBrainsMono', monospace; font-size: 0.74rem; color: var(--muted); background: var(--bg2); border: 1px solid var(--rule); border-radius: 6px; padding: 3px 12px; margin-left: 8px; flex: 1; }
+.proto-body { padding: 22px; }
+.proto-hint { font-size: 0.8rem; color: var(--muted); padding: 8px 16px; border-top: 1px dashed var(--rule); background: #FAFBFE; }
+
+/* demo shared widgets */
+.d-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.d-input, .d-select { width: 100%; padding: 8px 12px; border: 1px solid var(--rule); border-radius: 8px; font-size: 0.88rem; font-family: inherit; background: var(--bg2); color: var(--ink); outline: none; }
+.d-input:focus, .d-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,70,229,0.12); }
+.d-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 18px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: #fff; font-size: 0.88rem; font-weight: 600; cursor: pointer; font-family: inherit; transition: all .15s; }
+.d-btn:hover { background: #4338CA; }
+.d-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.d-btn.ghost { background: transparent; color: var(--accent); }
+.d-btn.ghost:hover { background: rgba(79,70,229,0.07); }
+.d-btn.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+.d-btn.sm { padding: 4px 12px; font-size: 0.78rem; }
+.badge { display: inline-flex; align-items: center; gap: 5px; font-size: 0.74rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+.badge.gray { background: #EEF0F6; color: var(--muted); }
+.badge.green { background: rgba(15,157,110,0.12); color: var(--ok); }
+.badge.indigo { background: rgba(79,70,229,0.1); color: var(--accent); }
+.badge.amber { background: rgba(194,130,10,0.12); color: var(--warn); }
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.toast { position: relative; margin-top: 12px; padding: 9px 14px; border-radius: 8px; font-size: 0.84rem; display: none; }
+.toast.ok { display: block; background: rgba(15,157,110,0.1); color: var(--ok); border: 1px solid rgba(15,157,110,0.25); }
+.toast.err { display: block; background: rgba(214,69,80,0.08); color: var(--danger); border: 1px solid rgba(214,69,80,0.25); }
+
+/* Demo A lifecycle */
+.lc-status { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 12px; background: #FAFBFE; margin-bottom: 16px; }
+.lc-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.lc-admin-form { margin: 14px 0; padding: 16px; border: 1px dashed rgba(79,70,229,0.4); border-radius: 12px; background: rgba(79,70,229,0.03); display: none; }
+.lc-admin-form.show { display: block; }
+.lc-refresh-overlay { position: absolute; inset: 0; background: rgba(246,247,251,0.94); display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; z-index: 5; border-radius: 0 0 16px 16px; }
+.lc-refresh-overlay.show { display: flex; }
+.spinner { width: 30px; height: 30px; border: 3px solid rgba(79,70,229,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.proto-frame { position: relative; }
+
+/* Demo B login */
+.login-box { max-width: 380px; margin: 0 auto; border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; background: var(--bg2); }
+.login-head { padding: 20px 22px 14px; text-align: center; border-bottom: 1px solid var(--rule); }
+.login-head .logo { font-family: 'JetBrainsMono', monospace; font-weight: 700; font-size: 1.05rem; color: var(--accent); }
+.login-head .sub { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
+.login-tabs { display: flex; border-bottom: 1px solid var(--rule); }
+.login-tabs button { flex: 1; padding: 10px 4px; font-size: 0.78rem; font-weight: 600; border: none; background: transparent; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; font-family: inherit; }
+.login-tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+.login-panel { display: none; padding: 20px 22px; }
+.login-panel.active { display: block; }
+.code-row { display: flex; gap: 8px; }
+.code-row .d-input { flex: 1; }
+.qr-wrap { text-align: center; padding: 6px 0; }
+.qr-box { width: 148px; height: 148px; margin: 0 auto 10px; border: 1px solid var(--rule); border-radius: 10px; display: flex; align-items: center; justify-content: center; background: #FAFBFE; }
+.qr-status { font-size: 0.82rem; color: var(--muted); margin-bottom: 12px; }
+.qr-status.ok { color: var(--ok); font-weight: 600; }
+
+/* Demo C config */
+.cfg-card { border: 1px solid var(--rule); border-radius: 12px; margin-bottom: 12px; overflow: hidden; background: var(--bg2); }
+.cfg-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; user-select: none; }
+.cfg-head .name { font-weight: 700; font-size: 0.92rem; flex: 1; }
+.cfg-body { display: none; padding: 4px 16px 16px; border-top: 1px dashed var(--rule); }
+.cfg-card.open .cfg-body { display: block; }
+.cfg-card.off { opacity: 0.62; }
+.switch { position: relative; width: 38px; height: 22px; flex: none; }
+.switch input { opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; position: absolute; z-index: 2; }
+.switch .track { position: absolute; inset: 0; background: #CBD0E1; border-radius: 999px; transition: background .18s; }
+.switch .thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: left .18s; box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+.switch input:checked ~ .track { background: var(--accent); }
+.switch input:checked ~ .thumb { left: 19px; }
+.kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.kv-grid .field { margin: 0; }
+
+/* Demo D isolation */
+.user-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.u-chip { display: flex; align-items: center; gap: 8px; padding: 7px 14px 7px 8px; border-radius: 999px; border: 1px solid var(--rule); background: var(--bg2); cursor: pointer; font-size: 0.84rem; font-weight: 600; transition: all .15s; font-family: inherit; }
+.u-chip .av { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.72rem; font-weight: 700; }
+.u-chip.active { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,70,229,0.14); }
+.iso-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; }
+.iso-col { border: 1px solid var(--rule); border-radius: 12px; padding: 14px 16px; background: #FAFBFE; }
+.ws-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 8px; background: var(--bg2); border: 1px solid var(--rule); margin-bottom: 8px; font-size: 0.82rem; }
+.ws-item .path { font-family: 'JetBrainsMono', monospace; font-size: 0.74rem; color: var(--muted); }
+.plug-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.plug-chip { font-size: 0.74rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: rgba(79,70,229,0.09); color: var(--accent); border: 1px solid rgba(79,70,229,0.18); font-family: 'JetBrainsMono', monospace; }
+.plug-chip.dim { background: #EEF0F6; color: var(--muted); border-color: var(--rule); text-decoration: line-through; }
+
+/* Demo E model perm */
+.mp-toggle { display: inline-flex; border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; margin-bottom: 14px; }
+.mp-toggle button { padding: 6px 16px; font-size: 0.8rem; font-weight: 600; border: none; background: transparent; color: var(--muted); cursor: pointer; font-family: inherit; }
+.mp-toggle button.active { background: var(--accent); color: #fff; }
+.provider-card { border: 1px solid var(--rule); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; background: var(--bg2); }
+.provider-card .row1 { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.provider-card .pname { font-weight: 700; font-size: 0.92rem; flex: 1; }
+.keyline { font-family: 'JetBrainsMono', monospace; font-size: 0.78rem; color: var(--muted); }
+.mp-note { padding: 10px 14px; border-radius: 10px; background: rgba(194,130,10,0.09); border: 1px solid rgba(194,130,10,0.25); color: var(--warn); font-size: 0.84rem; font-weight: 600; margin-bottom: 12px; }
+
+/* Demo F subuser */
+.sub-list { margin-top: 14px; border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
+.sub-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--rule); font-size: 0.86rem; background: var(--bg2); }
+.sub-row:last-child { border-bottom: none; }
+.dialog-mask { position: absolute; inset: 0; background: rgba(25,29,46,0.4); display: none; align-items: center; justify-content: center; z-index: 8; border-radius: 0 0 16px 16px; }
+.dialog-mask.show { display: flex; }
+.dialog { width: min(480px, 92%); background: var(--bg2); border-radius: 14px; padding: 22px; box-shadow: 0 18px 50px rgba(0,0,0,0.25); max-height: 92%; overflow: auto; }
+.dialog h5 { font-size: 1rem; margin-bottom: 14px; }
+.plug-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0; }
+.plug-check { display: flex; align-items: flex-start; gap: 8px; font-size: 0.8rem; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 8px; cursor: pointer; }
+.plug-check input { margin-top: 3px; accent-color: var(--accent); }
+.plug-check .dep { display: block; font-size: 0.7rem; color: var(--warn); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
+/* ===================== Footer sources ===================== */
+footer { grid-column: 1 / -1; grid-row: 3; margin-top: 70px; padding-top: 26px; border-top: 1px solid var(--rule); }
+footer .sources h2 { border: none; padding: 0; margin: 0 0 14px; font-size: 1.05rem; }
+footer .sources h2::before { display: none; }
+footer .sources ol { padding-left: 1.2rem; font-size: 0.85rem; color: var(--muted); }
+footer .sources li { margin-bottom: 0.5rem; overflow-wrap: break-word; word-break: break-all; }
+footer .sources .src-title { color: var(--ink); word-break: normal; }
+footer .sources .src-url { display: block; margin-top: 0.15rem; font-size: 0.82rem; color: var(--accent); word-break: break-all; }
+sup a { color: var(--accent); text-decoration: none; font-size: 0.75em; font-weight: 600; }
+sup a:hover { text-decoration: underline; }
+
+@media (max-width: 960px) {
+  .wrap { grid-template-columns: 1fr; gap: 0; }
+  .toc { display: none; }
+  main { grid-column: 1; }
+  .iso-grid, .kv-grid, .plug-checks { grid-template-columns: 1fr; }
+}
+@media print {
+  .toc, .proto-hint { display: none; }
+  body::before { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="toc-col">
+<aside class="toc" id="toc">
+  <div class="toc-title">目录</div>
+  <a href="#sec-1">1 需求背景</a>
+  <a href="#sec-2">2 生态调研与功能综合</a>
+  <a href="#sec-2-1" class="lv2">2.1 调研范围</a>
+  <a href="#sec-2-2" class="lv2">2.2 相关插件盘点</a>
+  <a href="#sec-2-3" class="lv2">2.3 空白点分析</a>
+  <a href="#sec-3">3 产品定位与命名</a>
+  <a href="#sec-4">4 角色与总体架构</a>
+  <a href="#sec-5">5 功能需求详述</a>
+  <a href="#fr-1" class="lv2">FR-1 生命周期与无侵入</a>
+  <a href="#fr-2" class="lv2">FR-2 多方式登录</a>
+  <a href="#fr-3" class="lv2">FR-3 认证方式可配置</a>
+  <a href="#fr-4" class="lv2">FR-4 工作区与会话隔离</a>
+  <a href="#fr-5" class="lv2">FR-5 插件可见性与授权</a>
+  <a href="#fr-6" class="lv2">FR-6 模型配置权限</a>
+  <a href="#fr-7" class="lv2">FR-7 综合增强能力</a>
+  <a href="#sec-6">6 安全与数据边界</a>
+  <a href="#sec-7">7 数据存储设计</a>
+  <a href="#sec-7" class="lv2">7.1 目录布局</a>
+  <a href="#sec-7" class="lv2">7.2 数据分类与职责</a>
+  <a href="#sec-7" class="lv2">7.3 存储原则</a>
+  <a href="#sec-8">8 兼容与性能约束</a>
+</aside>
+</div>
+
+<header class="cover">
+  <div class="kicker">Product Requirements Document · dsh 插件</div>
+  <h1><span class="en">dsh-multi-user</span><br>DeepSeek Harness 多用户插件需求文档</h1>
+  <p class="subtitle">在一台 DeepSeek Harness（dsh）上，为多个用户提供独立的登录、工作区与插件环境，模型与凭据由主管理员统一管控。</p>
+  <div class="meta">
+    <span>版本 <b>v0.1 草案</b></span>
+    <span>日期 <b>2026-08-17</b></span>
+    <span>文档类型 <b>插件 PRD（基于生态调研）</b></span>
+    <span>目标平台 <b>dsh Web（127.0.0.1:3080）</b></span>
+  </div>
+  <div class="name-banner">
+    <span class="repo">dsh-multi-user</span>
+    <span class="tag">推荐仓库名 · 已核验未被占用（2026-08-17）· GitHub topic：dsh-plugin / multi-user</span>
+  </div>
+</header>
+
+<main>
+
+<!-- ================================================= 1 背景 ================================================= -->
+<h2 id="sec-1"><span class="no">1</span>需求背景</h2>
+
+<p class="lead">DeepSeek 于 2026 年 8 月 13 日开源了 agent 运行时 <strong>DeepSeek Harness（dsh）</strong>，其核心主张是"一切皆插件"：模型、工具、会话存储、沙箱、调度循环乃至 Web 界面全部以插件形式挂载在 Cordis 内核上，注册即可逆、热插拔、无需修改框架源码<sup><a href="#cite-1">[1]</a></sup><sup><a href="#cite-2">[2]</a></sup>。项目上线数日即获得超过 12 万 Star，围绕 <code>dsh-plugin</code> GitHub topic 已形成 5700+ 插件仓库的生态<sup><a href="#cite-3">[3]</a></sup>。</p>
+
+<p>dsh 的典型运行形态是一台主机上的个人服务：执行 <code>npx @deepseek-ai/dsh web</code> 后在浏览器打开 <code>127.0.0.1:3080</code>，选择工作区目录、配置模型 API Key 即可使用<sup><a href="#cite-4">[4]</a></sup>。所有个人状态集中存放在 <code>$DSH_HOME</code>（默认 <code>~/.dsh</code>）下：各 profile 的插件组合清单、<code>settings.yaml</code> 配置，以及写入 <code>.credentials.yaml</code> 的模型凭据（页面只能看到脱敏描述符）<sup><a href="#cite-12">[12]</a></sup>。这是一套明确面向单人的设计——官方社区对"团队怎么共用 dsh"的答复是"共享 profile，不共享凭据"，即仍然各起各的服务<sup><a href="#cite-12">[12]</a></sup>。</p>
+
+<p>但共用一台 dsh 的需求真实存在，而且没有一个现成方案能接住：</p>
+
+<ul class="plain">
+  <li><strong>小团队与家庭</strong>：一台 NAS 或内网服务器跑一个 dsh，几个人都想用，只能共享同一个浏览器入口——工作区互相可见、会话历史混在一起，谁误删目录都会影响别人。</li>
+  <li><strong>成本管控</strong>：模型 API Key 填一次全员可用，任何成员都能进设置页改模型、看 Key 描述符，用量也无法按人分账。</li>
+  <li><strong>权限分级</strong>：管理员希望控制"谁能用哪些插件、哪些模型"，而 dsh 的插件与模型配置都是 profile 级全局的，没有按用户的开关。</li>
+</ul>
+
+<p>生态调研（见第 2 章）确认：现有插件覆盖了提供商登录、账号池、插件市场、用量统计等方向，但没有一款插件做"多用户"——登录墙、按用户隔离的工作区与插件、模型配置权限分级、按用户用量统计这四件事都是空白（生态外仅有一个独立网关形态的多用户方案，非插件<sup><a href="#cite-14">[14]</a></sup>）。本插件即为此空白而生。</p>
+
+<!-- ================================================= 2 调研 ================================================= -->
+<h2 id="sec-2"><span class="no">2</span>生态调研与功能综合</h2>
+
+<h3 id="sec-2-1"><span class="no">2.1</span>调研范围</h3>
+<p>调研覆盖三层数据源：dsh 官方仓库与文档（P0）、GitHub <code>dsh-plugin</code> topic 与 awesome 清单（P1）、插件目录站 dsh-plugins.top 于 2026-08-17 的快照（收录 307 款精选插件、10 个分类、共 23772 Star，全量生态 1000+ 收录）<sup><a href="#cite-3">[3]</a></sup><sup><a href="#cite-5">[5]</a></sup>。筛选标准：与"多用户、登录鉴权、隔离、账号与凭据管理、插件管理"直接相关的插件，逐个阅读其 README 提取功能与设计模式。</p>
+
+<h3 id="sec-2-2"><span class="no">2.2</span>相关插件盘点</h3>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th style="width:15%">类别</th><th style="width:23%">代表插件</th><th style="width:32%">核心功能</th><th style="width:30%">对本插件的借鉴</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>提供商登录鉴权</td>
+      <td><span class="mono">dsh-AuthInOne</span><sup><a href="#cite-6">[6]</a></sup></td>
+      <td>9 家 Provider 的 OAuth / 设备流登录（OpenAI Codex、Kimi、xAI、Anthropic 等）、API Key 与自定义 OpenAI 兼容提供商管理、默认模型切换、token/成本统计</td>
+      <td>登录事务模型（start / redacted status / cancel / refresh / logout）；凭证只存 Host 侧、浏览器仅获脱敏状态；自包含安装器 + 同端口替换重启；卸载自动还原官方组件</td>
+    </tr>
+    <tr>
+      <td>账号池</td>
+      <td><span class="mono">dockyard-dsh</span><sup><a href="#cite-7">[7]</a></sup></td>
+      <td>macOS 原生账号池：扫描导入本机已有登录态，manual / sticky-session / round-robin / failover 调度策略，实时模型目录与额度窗口</td>
+      <td>多凭据统一持有、按策略分发的思路；但它是"多人共用多个提供商账号"，不是"多用户各用各的环境"</td>
+    </tr>
+    <tr>
+      <td>多用户网关先例</td>
+      <td><span class="mono">dsh-server-deployment</span><sup><a href="#cite-14">[14]</a></sup>（曾用名 dsh-multi-user-gateway）</td>
+      <td>DSH Web 的多用户网关：在 dsh 之外部署一层网关做多人接入</td>
+      <td>证明"多人共用一台 dsh"需求真实存在；但它是外部网关形态，本插件以无侵入插件形态在 dsh 内部实现，安装与还原体验完全不同</td>
+    </tr>
+    <tr>
+      <td>插件管理</td>
+      <td><span class="mono">dsh-web-plugin-manager</span><sup><a href="#cite-8">[8]</a></sup>、<span class="mono">dsh-plugin-hub</span>、<span class="mono">dsh-market</span></td>
+      <td>Web UI 内查看、实时启停、安装卸载、更新检测、健康检查（依赖 / 冲突 / 兼容性分析）、环境管理、内置插件市场</td>
+      <td>插件级控制面板的交互范式；健康检查中的依赖冲突分析可用于"给子用户分配插件"时的依赖提示</td>
+    </tr>
+    <tr>
+      <td>配置安全</td>
+      <td><span class="mono">dsh-undo-plugin</span><sup><a href="#cite-9">[9]</a></sup></td>
+      <td>配置与插件代码变更撤销、脱敏快照、一键安全模式、DSH 无法启动时仍可用的离线 CLI/GUI</td>
+      <td>变更前快照 + 一键回滚机制，直接用于本插件"启用 / 卸载"的可逆性保障</td>
+    </tr>
+    <tr>
+      <td>用量统计</td>
+      <td><span class="mono">dsh-usage-stats</span><sup><a href="#cite-10">[10]</a></sup>、<span class="mono">dsh-cost-meter</span></td>
+      <td>token 热力图、按模型分解、账户余额、会话费用与预算显示</td>
+      <td>多租户天然要求按用户统计与配额——将"按模型"维度扩展出"按用户"维度（列入 FR-7）</td>
+    </tr>
+    <tr>
+      <td>Agent 团队</td>
+      <td><span class="mono">dsh-agent-teams</span><sup><a href="#cite-11">[11]</a></sup></td>
+      <td>给子 Agent 增加队长 / 成员 / 任务依赖 / 活动面板</td>
+      <td>负样本：命名与定位上须与"用户团队"明确切割，避免被误认为同类插件</td>
+    </tr>
+    <tr>
+      <td>harness 级登录先例</td>
+      <td><span class="mono">deepseek-helmsman</span><sup><a href="#cite-13">[13]</a></sup></td>
+      <td>pi harness 的 fork，DeepSeek-only 终端 agent，<code>/login</code> 输入 API Key，凭据存本地 <code>auth.json</code></td>
+      <td>证明"登录态"可以放进 harness 层；但它是 fork 且仍是单用户，本插件以无侵入插件形态实现同等能力</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h3 id="sec-2-3"><span class="no">2.3</span>空白点分析</h3>
+<p>把上述插件的能力放到"多租户"的四个核心诉求下检视，结论是全部落空：</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>多租户诉求</th><th>现有最接近的方案</th><th>差距</th></tr></thead>
+  <tbody>
+    <tr><td>登录墙与用户身份</td><td>dsh-AuthInOne（提供商 OAuth 登录）</td><td>登录对象是"模型提供商账号"，不是"使用 dsh 的人"；无本地用户体系</td></tr>
+    <tr><td>工作区 / 会话按人隔离</td><td>无（dsh 工作区为目录级全局列表）</td><td>所有访客看到同一个工作区与会话列表</td></tr>
+    <tr><td>插件按人可见</td><td>dsh-web-plugin-manager（启停管理）</td><td>启停是 profile 级全局开关，影响所有人，无按用户过滤</td></tr>
+    <tr><td>模型配置权限分级</td><td>无（设置页对所有人开放）</td><td>任何访客可增删提供商、更换默认模型、看到 Key 脱敏信息</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout">
+  <div class="t">调研结论</div>
+  "一切皆插件"的架构恰好给了本插件完整的落点：登录墙可以作为一个 UI 层插件挂载，工作区列表、插件可见性、模型设置页均可通过插件扩展点替换或过滤，而无需修改 dsh 内核——AuthInOne 已经验证了"替换设置页组件、卸载时还原官方组件"这条路是可行的<sup><a href="#cite-6">[6]</a></sup>。
+</div>
+
+<!-- ================================================= 3 命名 ================================================= -->
+<h2 id="sec-3"><span class="no">3</span>产品定位与命名</h2>
+
+<p class="lead"><strong>一句话定位：</strong>dsh-multi-user 把一台个人 dsh 变成一台多人可用的 dsh——登录才可进入，每人有自己的工作区、会话与插件，模型与凭据只有主管理员能动。</p>
+
+<h3>命名分析</h3>
+<p>生态内的检索路径决定了命名策略：用户在 GitHub 搜 <code>dsh-plugin</code> topic、在目录站按关键词（Web、Agent、工具、安全……）浏览<sup><a href="#cite-5">[5]</a></sup>，插件名的功能词直接决定被发现的概率。现有命名规律是 <code>dsh-&lt;功能词&gt;</code>（dsh-web-ui、dsh-cost-meter、dsh-notification）。候选评估如下：</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>候选名</th><th>优点</th><th>风险</th><th>结论</th></tr></thead>
+  <tbody>
+    <tr><td class="mono">dsh-multi-user</td><td>最直白，任何背景的人一眼可懂；<code>dsh-</code> 前缀锚定生态检索，multi-user 是覆盖面最广的功能词；已核验 GitHub 无同名仓库（2026-08-17），仅存在名称不同的相近方案<sup><a href="#cite-14">[14]</a></sup></td><td>"multi-user" 裸词在 GitHub 噪声大，但配合 dsh- 前缀与 topics 后检索精度可控</td><td><span class="badge green">推荐</span></td></tr>
+    <tr><td class="mono">dsh-multiuser</td><td>合成词写法，含义相同，撞名概率更低</td><td>可读性略逊于带连字符写法</td><td><span class="badge gray">备选</span></td></tr>
+    <tr><td class="mono">dsh-tenancy</td><td>行业术语 tenancy（租户制），偏 B2B 语境，独特性高</td><td>对非企业背景用户不直观</td><td><span class="badge gray">备选</span></td></tr>
+    <tr><td class="mono">dsh-multi-tenant</td><td>术语准确</td><td>名称已被其他仓库占用（用户反馈，2026-08-17）</td><td><span class="badge amber">放弃</span></td></tr>
+    <tr><td class="mono">dsh-team / dsh-team-space</td><td>好记</td><td>与 dsh-agent-teams（子 Agent 团队）<sup><a href="#cite-11">[11]</a></sup>强烈撞名，会被误认</td><td><span class="badge amber">放弃</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>配套的仓库呈现（让 GitHub 首屏即可读懂）：</p>
+<ul class="plain">
+  <li>仓库描述：<span class="mono">Turn one DeepSeek Harness (dsh) into a multi-user platform: password / email-code / WeChat-QR / SMS login, per-user workspace &amp; plugin isolation, admin-only model config. 把一台 dsh 变成多用户平台。</span></li>
+  <li>Topics：<code>dsh-plugin</code>、<code>deepseek-harness</code>、<code>dsh</code>、<code>multi-tenant</code>、<code>multi-user</code>、<code>authentication</code>、<code>workspace-isolation</code></li>
+  <li>README 首屏对照表：单人用 dsh vs 装 dsh-multi-user 之后，一行看懂差异。</li>
+</ul>
+
+<!-- ================================================= 4 架构 ================================================= -->
+<h2 id="sec-4"><span class="no">4</span>角色与总体架构</h2>
+
+<h3><span class="no">4.1</span>角色与术语</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th style="width:18%">术语</th><th>定义</th></tr></thead>
+  <tbody>
+    <tr><td><strong>主管理员（Owner）</strong></td><td>启用插件时绑定的第一个用户，是原 dsh 个人配置的继承者。全插件周期内唯一可配置模型与凭据、管理子用户、管理插件安装的角色。</td></tr>
+    <tr><td><strong>子用户（Member）</strong></td><td>由主管理员创建的普通用户，登录后进入自己的隔离环境：只见自己的工作区、会话与被授权的插件。</td></tr>
+    <tr><td><strong>租户环境</strong></td><td>一个用户名下的工作区集合、会话存储、插件可见集与个性化设置的总和。</td></tr>
+    <tr><td><strong>未启用态</strong></td><td>插件安装但未开启的状态，此状态下 dsh 行为与未安装时完全一致。</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3><span class="no">4.2</span>权限矩阵</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>能力</th><th>主管理员</th><th>子用户</th></tr></thead>
+  <tbody>
+    <tr><td>配置模型提供商与 API Key</td><td><span class="yes">可</span></td><td><span class="no-x">不可（只读可见可用模型清单）</span></td></tr>
+    <tr><td>选择会话内使用的模型</td><td><span class="yes">可（全部）</span></td><td><span class="yes">可（限管理员开放的模型集合）</span></td></tr>
+    <tr><td>安装 / 卸载插件</td><td><span class="yes">可</span></td><td><span class="no-x">不可</span></td></tr>
+    <tr><td>启用插件</td><td><span class="yes">可（全部）</span></td><td><span class="yes">可（仅被授权的插件）</span></td></tr>
+    <tr><td>工作区</td><td><span class="yes">全部 + 目录授权管理</span></td><td><span class="yes">仅自己被授权的目录</span></td></tr>
+    <tr><td>会话与历史记录</td><td><span class="yes">全部</span></td><td><span class="yes">仅自己的</span></td></tr>
+    <tr><td>子用户管理（创建 / 停用 / 插件授权）</td><td><span class="yes">可</span></td><td><span class="no-x">不可</span></td></tr>
+    <tr><td>登录方式与认证接口配置</td><td><span class="yes">可</span></td><td><span class="no-x">不可</span></td></tr>
+    <tr><td>查看用量统计</td><td><span class="yes">全部用户</span></td><td><span class="yes">仅自己</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3><span class="no">4.3</span>总体架构</h3>
+
+<figure class="diagram">
+  <div class="svgbox">
+  <svg viewBox="0 0 960 440" role="img" aria-label="dsh-multi-user 分层架构图：用户经登录与认证适配器进入会话与身份，再经可见性路由层进入各自租户环境；模型与凭据仅主管理员可写，最终汇入零修改的 dsh 内核" style="font-family:inherit">
+    <defs>
+      <marker id="mA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="var(--accent)"/></marker>
+      <marker id="mM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="var(--muted)"/></marker>
+      <marker id="mB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="var(--accent2)"/></marker>
+    </defs>
+    <g stroke="var(--accent)" stroke-width="1.6" fill="none">
+      <path d="M128,88 H150 V182 H170" marker-end="url(#mA)"/>
+      <path d="M128,182 H170" marker-end="url(#mA)"/>
+      <path d="M128,276 H150 V182 H170" marker-end="url(#mA)"/>
+      <path d="M304,182 H346" marker-end="url(#mA)"/>
+      <path d="M480,182 H522" marker-end="url(#mA)"/>
+      <path d="M640,182 H678" marker-end="url(#mA)"/>
+      <path d="M808,182 H822 V88 H840" marker-end="url(#mA)"/>
+      <path d="M808,182 H840" marker-end="url(#mA)"/>
+      <path d="M808,182 H822 V276 H840" marker-end="url(#mA)"/>
+      <path d="M356,358 H514" marker-end="url(#mA)"/>
+      <path d="M746,214 V324" marker-end="url(#mA)"/>
+      <path d="M898,206 V358 H806" marker-end="url(#mA)"/>
+    </g>
+    <g stroke="var(--muted)" stroke-width="1.4" stroke-dasharray="5 4" fill="none">
+      <path d="M416,96 V144" marker-end="url(#mM)"/>
+      <path d="M416,268 V220" marker-end="url(#mM)"/>
+    </g>
+    <path d="M69,112 V358 H170" stroke="var(--accent)" stroke-width="1.6" stroke-dasharray="5 4" fill="none" marker-end="url(#mA)"/>
+    <text x="98" y="350" text-anchor="middle" font-size="10.5" fill="var(--accent)">唯一可写</text>
+    <g>
+      <rect x="10" y="64" width="118" height="48" rx="10" fill="var(--bg2)" stroke="var(--rule)"/>
+      <text x="69" y="86" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">用户 A</text>
+      <text x="69" y="102" text-anchor="middle" font-size="10.5" fill="var(--accent)">主管理员</text>
+      <rect x="10" y="158" width="118" height="48" rx="10" fill="var(--bg2)" stroke="var(--rule)"/>
+      <text x="69" y="180" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">用户 B</text>
+      <text x="69" y="196" text-anchor="middle" font-size="10.5" fill="var(--muted)">子用户</text>
+      <rect x="10" y="252" width="118" height="48" rx="10" fill="var(--bg2)" stroke="var(--rule)"/>
+      <text x="69" y="274" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">用户 C</text>
+      <text x="69" y="290" text-anchor="middle" font-size="10.5" fill="var(--muted)">子用户</text>
+    </g>
+    <g>
+      <rect x="330" y="52" width="172" height="44" rx="10" fill="var(--bg2)" stroke="var(--rule)" stroke-dasharray="5 4"/>
+      <text x="416" y="72" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">外部认证接口</text>
+      <text x="416" y="88" text-anchor="middle" font-size="10.5" fill="var(--muted)">管理员在设置中配置</text>
+      <rect x="330" y="268" width="172" height="44" rx="10" fill="var(--bg2)" stroke="var(--rule)" stroke-dasharray="5 4"/>
+      <text x="416" y="288" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">内置用户库</text>
+      <text x="416" y="304" text-anchor="middle" font-size="10.5" fill="var(--muted)">开箱默认</text>
+    </g>
+    <g>
+      <rect x="176" y="150" width="128" height="64" rx="10" fill="var(--bg2)" stroke="var(--rule)"/>
+      <text x="240" y="176" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">登录页</text>
+      <text x="240" y="194" text-anchor="middle" font-size="10.5" fill="var(--muted)">未登录一律重定向</text>
+      <rect x="352" y="150" width="128" height="64" rx="10" fill="var(--bg2)" stroke="var(--rule)"/>
+      <text x="416" y="176" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">认证适配器</text>
+      <text x="416" y="194" text-anchor="middle" font-size="10.5" fill="var(--muted)">四种登录方式</text>
+      <rect x="528" y="150" width="112" height="64" rx="10" fill="var(--bg2)" stroke="var(--accent2)"/>
+      <text x="584" y="176" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">会话与身份</text>
+      <text x="584" y="194" text-anchor="middle" font-size="10.5" fill="var(--muted)">HttpOnly 会话</text>
+      <rect x="684" y="150" width="124" height="64" rx="10" fill="var(--bg2)" stroke="var(--rule)"/>
+      <text x="746" y="170" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">可见性路由层</text>
+      <text x="746" y="187" text-anchor="middle" font-size="10.5" fill="var(--muted)">工作区 · 会话 · 插件</text>
+      <text x="746" y="202" text-anchor="middle" font-size="10.5" fill="var(--muted)">按用户过滤</text>
+    </g>
+    <g>
+      <rect x="846" y="64" width="104" height="48" rx="10" fill="var(--bg2)" stroke="var(--rule)"/>
+      <text x="898" y="86" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">租户环境 A</text>
+      <text x="898" y="102" text-anchor="middle" font-size="10.5" fill="var(--muted)">工作区·插件集</text>
+      <rect x="846" y="158" width="104" height="48" rx="10" fill="var(--bg2)" stroke="var(--rule)"/>
+      <text x="898" y="180" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">租户环境 B</text>
+      <text x="898" y="196" text-anchor="middle" font-size="10.5" fill="var(--muted)">互相不可见</text>
+      <rect x="846" y="252" width="104" height="48" rx="10" fill="var(--bg2)" stroke="var(--rule)"/>
+      <text x="898" y="274" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">租户环境 C</text>
+      <text x="898" y="290" text-anchor="middle" font-size="10.5" fill="var(--muted)">互相不可见</text>
+    </g>
+    <g>
+      <rect x="176" y="330" width="180" height="56" rx="10" fill="var(--bg2)" stroke="var(--accent)"/>
+      <text x="266" y="354" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">模型与凭据配置</text>
+      <text x="266" y="372" text-anchor="middle" font-size="10.5" fill="var(--accent)">仅主管理员可写</text>
+      <rect x="520" y="330" width="280" height="56" rx="10" fill="var(--bg2)" stroke="var(--rule)"/>
+      <text x="660" y="354" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">dsh 内核（Cordis）</text>
+      <text x="660" y="372" text-anchor="middle" font-size="10.5" fill="var(--muted)">官方能力零修改</text>
+    </g>
+  </svg>
+  </div>
+  <figcaption>图 1：dsh-multi-user 分层架构。登录与可见性过滤全部通过插件扩展点实现，dsh 内核与官方组件零修改。</figcaption>
+</figure>
+
+<div class="callout">
+  <div class="t">三条不可妥协的设计原则</div>
+  <ol class="plain">
+    <li><strong>无侵入</strong>：只通过 dsh 插件扩展点注册能力，不 patch 内核、不改官方源码；未启用态行为与原版逐位一致。</li>
+    <li><strong>可逆</strong>：启用前快照个人配置；停用保留数据；卸载自动还原原 dsh 个人配置（对齐 dsh "所有注册皆可逆"的内核承诺<sup><a href="#cite-2">[2]</a></sup>与 AuthInOne 的卸载还原先例<sup><a href="#cite-6">[6]</a></sup>）。</li>
+    <li><strong>凭证不降级</strong>：模型 API Key 等敏感凭据仍走 dsh 原生 Host 侧凭据体系，浏览器与子用户永远只见脱敏信息，权限收紧而不放松。</li>
+  </ol>
+</div>
+
+<!-- ================================================= 5 功能详述 ================================================= -->
+<h2 id="sec-5"><span class="no">5</span>功能需求详述</h2>
+<p>本章按六个功能模块展开，每个模块附可交互原型。原型用于确认交互逻辑，不代表最终视觉稿。优先级标注：P0 = 首个可用版本必须交付；P1 = 紧随其后的第一批增强。</p>
+
+<!-- ---------------- FR-1 ---------------- -->
+<h3 id="fr-1"><span class="no">FR-1</span>插件生命周期与无侵入设计 <span class="badge indigo">P0</span></h3>
+
+<figure class="proto">
+  <div class="proto-frame">
+    <div class="proto-chrome">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="url">127.0.0.1:3080 · 设置 → 多用户（dsh-multi-user）</span>
+    </div>
+    <div class="proto-body" id="demo-lc">
+      <div class="lc-status">
+        <span class="d-label" style="margin:0">插件状态</span>
+        <span class="badge gray" id="lc-badge">未启用</span>
+        <span style="font-size:0.84rem;color:var(--muted)">主管理员：<b id="lc-admin-name" style="color:var(--ink)">未设置</b></span>
+        <span style="flex:1"></span>
+        <button class="d-btn ghost sm" id="lc-setup-btn">设置主管理员</button>
+        <button class="d-btn sm" id="lc-enable-btn" disabled>启用</button>
+        <button class="d-btn danger sm" id="lc-disable-btn" style="display:none">停用</button>
+      </div>
+
+      <div class="lc-admin-form" id="lc-admin-form">
+        <div class="kv-grid">
+          <div class="field"><label>管理员用户名</label><input class="d-input" id="lc-a-username" placeholder="例如 alice"></div>
+          <div class="field"><label>初始登录方式</label>
+            <select class="d-select" id="lc-a-method"><option>账号密码</option><option>邮箱验证码</option><option>短信验证码</option></select>
+          </div>
+          <div class="field"><label>初始密码</label><input class="d-input" type="password" id="lc-a-pw" placeholder="至少 6 位"></div>
+          <div class="field"><label>确认密码</label><input class="d-input" type="password" id="lc-a-pw2" placeholder="再次输入"></div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="d-btn sm" id="lc-a-save">保存主管理员</button>
+          <button class="d-btn ghost sm" id="lc-a-cancel">取消</button>
+        </div>
+        <div class="toast err" id="lc-a-err"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:0">
+        <div class="t" style="font-weight:700;font-size:0.92rem;margin-bottom:6px">卸载行为</div>
+        <p style="font-size:0.86rem;color:var(--muted)">卸载插件将自动停用多用户功能并恢复原 dsh 个人配置（工作区、模型、会话回到启用前的全局默认视角）；各子用户的租户数据默认保留在插件数据目录，可在卸载时勾选"同时彻底清除用户数据"。</p>
+      </div>
+
+      <div class="lc-refresh-overlay" id="lc-overlay">
+        <div class="spinner"></div>
+        <div style="font-size:0.9rem;font-weight:600">多用户模式已启用，页面即将自动刷新…</div>
+        <div style="font-size:0.78rem;color:var(--muted)">刷新后未登录访问将重定向到登录页</div>
+      </div>
+    </div>
+    <div class="proto-hint">可交互：点击"设置主管理员"填写后保存 → "启用"按钮激活 → 点击启用观察自动刷新流程 → 刷新后进入已启用态，可体验"停用"。</div>
+  </div>
+  <figcaption>原型 1：设置页的多用户卡片。未设置主管理员时启用按钮不可点。</figcaption>
+</figure>
+
+<h4>业务逻辑</h4>
+<p>安装（<code>dsh plugin --profile web add …</code>）完成后，插件处于<mark class="key">未启用态</mark>：不注册登录路由、不替换任何官方组件，dsh 的启动配置树与安装前一致（可用 <code>dsh web --dump-config</code> 验证）。用户在设置页看到"多用户"卡片，卡片上明确提示启用前置条件——<strong>必须先设置主管理员</strong>：填写用户名、初始密码并选择一种初始登录方式。主管理员保存后，"启用"按钮方可点击；在此之前按钮置灰并附原因文案，避免出现"启用了却没有管理员能进去"的死锁。</p>
+
+<p>点击启用后，插件做三件事：对当前 <code>$DSH_HOME</code> 的个人配置（模型提供商、默认工作区、既有会话归属）做一次快照并把它们绑定给主管理员；写入启用状态；触发<mark class="key">页面自动刷新</mark>。刷新完成后，登录墙生效——此后任何未携带有效会话的访问都会被重定向到登录页，主管理员用刚才设置的账号登录后，看到的正是启用前自己的环境（模型、会话、工作区原样继承），实现了"单人无缝过渡为多人的管理员"。</p>
+
+<p>停用是可逆操作：登录墙撤下、回到单用户视角（即主管理员视角成为全局默认），所有租户数据保留，再次启用无需重设。卸载则遵循还原承诺：插件通过官方 CLI 卸载时自动执行还原流程——若从未启用过，dsh 不受任何影响；若启用过，则把主管理员的环境恢复为全局默认配置，等同于回到安装前。子用户数据默认保留（目录可手动清理），卸载对话框中提供"同时彻底清除用户数据"选项。</p>
+
+<h4>状态转换</h4>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>当前状态</th><th>允许操作</th><th>下一状态</th><th>触发条件</th></tr></thead>
+  <tbody>
+    <tr><td>已安装 · 未启用</td><td>设置 / 修改主管理员</td><td>已安装 · 未启用（管理员已设置）</td><td>保存管理员表单且校验通过</td></tr>
+    <tr><td>未启用（管理员已设置）</td><td>启用</td><td>已启用</td><td>点击启用 → 快照 → 自动刷新</td></tr>
+    <tr><td>已启用</td><td>停用</td><td>未启用（管理员与数据保留）</td><td>管理员确认停用</td></tr>
+    <tr><td>任意状态</td><td>卸载</td><td>还原为原 dsh 个人配置</td><td>执行插件卸载（未启用过则无任何影响）</td></tr>
+  </tbody>
+</table>
+</div>
+
+<figure class="diagram">
+  <div class="svgbox">
+  <svg viewBox="0 0 900 290" role="img" aria-label="插件生命周期状态机：安装后默认未启用，设置主管理员后可启用，可停用保留数据，卸载还原原 dsh 配置" style="font-family:inherit">
+    <defs>
+      <marker id="sA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="var(--accent)"/></marker>
+      <marker id="sB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="var(--accent2)"/></marker>
+    </defs>
+    <circle cx="22" cy="96" r="5" fill="var(--accent)"/>
+    <path d="M29,96 H60" stroke="var(--accent)" stroke-width="1.6" fill="none" marker-end="url(#sA)"/>
+    <path d="M108,68 C108,26 208,26 208,64" stroke="var(--accent)" stroke-width="1.4" fill="none" marker-end="url(#sA)"/>
+    <text x="158" y="20" text-anchor="middle" font-size="10.5" fill="var(--accent)">设置主管理员（启用前置）</text>
+    <path d="M250,96 H328" stroke="var(--accent)" stroke-width="1.6" fill="none" marker-end="url(#sA)"/>
+    <text x="289" y="84" text-anchor="middle" font-size="10.5" fill="var(--muted)">启用：快照 + 自动刷新</text>
+    <path d="M436,124 V180 H158 V130" stroke="var(--accent)" stroke-width="1.4" fill="none" marker-end="url(#sA)"/>
+    <text x="297" y="173" text-anchor="middle" font-size="10.5" fill="var(--muted)">停用：数据保留</text>
+    <path d="M482,96 H602" stroke="var(--accent2)" stroke-width="1.4" fill="none" marker-end="url(#sB)"/>
+    <text x="542" y="86" text-anchor="middle" font-size="10.5" fill="var(--muted)">卸载</text>
+    <path d="M108,124 V246 H734 V130" stroke="var(--accent2)" stroke-width="1.4" fill="none" marker-end="url(#sB)"/>
+    <text x="430" y="240" text-anchor="middle" font-size="10.5" fill="var(--muted)">卸载（从未启用过，无影响）</text>
+    <rect x="66" y="68" width="184" height="56" rx="12" fill="var(--bg2)" stroke="var(--rule)"/>
+    <text x="158" y="92" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">已安装 · 未启用</text>
+    <text x="158" y="110" text-anchor="middle" font-size="10.5" fill="var(--muted)">行为与未安装时一致</text>
+    <rect x="334" y="68" width="148" height="56" rx="12" fill="var(--bg2)" stroke="var(--rule)"/>
+    <text x="408" y="92" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">已启用</text>
+    <text x="408" y="110" text-anchor="middle" font-size="10.5" fill="var(--muted)">登录墙与隔离生效</text>
+    <rect x="608" y="68" width="252" height="56" rx="12" fill="var(--bg2)" stroke="var(--accent2)"/>
+    <text x="734" y="92" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">还原为原 dsh 个人配置</text>
+    <text x="734" y="110" text-anchor="middle" font-size="10.5" fill="var(--muted)">回到安装前的状态</text>
+  </svg>
+  </div>
+  <figcaption>图 2：插件生命周期状态机。</figcaption>
+</figure>
+
+<!-- ---------------- FR-2 ---------------- -->
+<h3 id="fr-2"><span class="no">FR-2</span>多方式登录 <span class="badge indigo">P0</span></h3>
+
+<figure class="proto">
+  <div class="proto-frame">
+    <div class="proto-chrome">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="url">127.0.0.1:3080 / login</span>
+    </div>
+    <div class="proto-body" id="demo-login">
+      <div class="login-box" id="login-box">
+        <div class="login-head">
+          <div class="logo">dsh · multi-user</div>
+          <div class="sub">选择一种方式登录你的工作台</div>
+        </div>
+        <div class="login-tabs" id="login-tabs">
+          <button class="active" data-tab="pw">账号密码</button>
+          <button data-tab="mail">邮箱验证码</button>
+          <button data-tab="wx">微信扫码</button>
+          <button data-tab="sms">短信验证码</button>
+        </div>
+
+        <div class="login-panel active" data-panel="pw">
+          <div class="field"><label>用户名</label><input class="d-input" id="lg-user" placeholder="alice"></div>
+          <div class="field"><label>密码</label><input class="d-input" type="password" id="lg-pw" placeholder="至少 6 位"></div>
+          <button class="d-btn" style="width:100%" id="lg-pw-btn">登 录</button>
+          <div class="toast" id="lg-pw-toast"></div>
+        </div>
+
+        <div class="login-panel" data-panel="mail">
+          <div class="field"><label>邮箱</label><input class="d-input" id="lg-mail" placeholder="you@example.com"></div>
+          <div class="field"><label>验证码</label>
+            <div class="code-row"><input class="d-input" id="lg-mail-code" placeholder="6 位数字"><button class="d-btn ghost" id="lg-mail-send">获取验证码</button></div>
+          </div>
+          <button class="d-btn" style="width:100%" id="lg-mail-btn">登 录</button>
+          <div class="toast" id="lg-mail-toast"></div>
+        </div>
+
+        <div class="login-panel" data-panel="wx">
+          <div class="qr-wrap">
+            <div class="qr-box" id="qr-box"></div>
+            <div class="qr-status" id="qr-status">打开微信扫一扫</div>
+            <button class="d-btn ghost sm" id="qr-sim">模拟手机扫码</button>
+          </div>
+          <div class="toast" id="lg-wx-toast"></div>
+        </div>
+
+        <div class="login-panel" data-panel="sms">
+          <div class="field"><label>手机号</label><input class="d-input" id="lg-phone" placeholder="13800000000"></div>
+          <div class="field"><label>验证码</label>
+            <div class="code-row"><input class="d-input" id="lg-sms-code" placeholder="6 位数字"><button class="d-btn ghost" id="lg-sms-send">获取验证码</button></div>
+          </div>
+          <button class="d-btn" style="width:100%" id="lg-sms-btn">登 录</button>
+          <div class="toast" id="lg-sms-toast"></div>
+        </div>
+      </div>
+
+      <div id="login-success" style="display:none;text-align:center;padding:30px 10px">
+        <div style="width:52px;height:52px;border-radius:50%;background:rgba(15,157,110,0.12);color:var(--ok);display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;margin:0 auto 10px">✓</div>
+        <div style="font-weight:700;font-size:1.05rem">登录成功</div>
+        <div style="font-size:0.86rem;color:var(--muted);margin:4px 0 16px" id="login-success-info">欢迎回来 · 正在进入你的工作台…</div>
+        <button class="d-btn ghost sm" id="lg-reset">重置演示</button>
+      </div>
+    </div>
+    <div class="proto-hint">可交互：四个页签均可试。账号密码：用户名非空且密码 ≥6 位即成功；验证码页签点击"获取验证码"进入 60s 倒计时，输入任意 6 位数字登录；微信页签点击"模拟手机扫码"走完 待扫码 → 已扫码 → 确认登录 三态。</div>
+  </div>
+  <figcaption>原型 2：登录页。仅显示管理员已启用的登录方式，此处为全量演示。</figcaption>
+</figure>
+
+<h4>业务逻辑</h4>
+<p>启用后，登录页成为 dsh Web 的唯一入口：任何未携带有效会话的页面访问（包括刷新、直达 URL、API 调用）一律重定向到 <code>/login</code>。页面上呈现的登录方式集合由管理员在 FR-3 中配置的启用项决定——只开账号密码就只显示一个页签，全部开启则显示四个，<mark class="key">登录方式对用户是"被动可选集"，不能自行增减</mark>。</p>
+
+<p>四种方式的交互流程：账号密码为用户名 + 密码直接提交校验；邮箱与短信验证码均为"输入账号标识 → 获取验证码（按钮进入 60 秒倒计时防重发）→ 输入验证码提交"；微信扫码展示二维码占位并轮询状态，依次经过<em>待扫码 → 已扫码待确认 → 确认登录</em>三态，二维码有效期 2 分钟，过期可手动刷新。任一方式登录成功后建立会话（HttpOnly Cookie，有效期可配，默认 7 天），根据账号解析出的用户身份进入对应租户环境；主管理员账号登录则进入管理员视角。</p>
+
+<h4>边界与异常</h4>
+<ul class="plain">
+  <li>验证码有效期默认 5 分钟；同一账号 1 分钟内最多请求 1 次，超限提示而非静默丢弃。</li>
+  <li>连续失败 5 次锁定 10 分钟（阈值可配），锁定期间所有方式均拒绝，防止撞库。</li>
+  <li>微信扫码轮询失败或认证接口超时（默认 5 秒）时，页签内显示可重试错误，不整页崩溃。</li>
+  <li>被停用的子用户登录时提示"账号已停用"，不泄露具体原因细节。</li>
+</ul>
+
+<!-- ---------------- FR-3 ---------------- -->
+<h3 id="fr-3"><span class="no">FR-3</span>认证方式可配置：接口与参数 <span class="badge indigo">P0</span></h3>
+
+<figure class="proto">
+  <div class="proto-frame">
+    <div class="proto-chrome">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="url">127.0.0.1:3080 · 设置 → 多租户 → 登录方式</span>
+    </div>
+    <div class="proto-body" id="demo-cfg">
+
+      <div class="cfg-card" data-m="pw">
+        <div class="cfg-head">
+          <span class="name">账号密码</span>
+          <span class="badge green">已启用 · 外部接口模式</span>
+          <label class="switch"><input type="checkbox" checked><span class="track"></span><span class="thumb"></span></label>
+        </div>
+        <div class="cfg-body">
+          <div class="kv-grid">
+            <div class="field"><label>校验接口 URL</label><input class="d-input" value="https://auth.corp.example.com/api/login"></div>
+            <div class="field"><label>请求方法</label><select class="d-select"><option>POST</option><option>GET</option></select></div>
+            <div class="field"><label>用户名字段名</label><input class="d-input" value="username"></div>
+            <div class="field"><label>密码字段名</label><input class="d-input" value="password"></div>
+            <div class="field"><label>成功判定 · 响应字段</label><input class="d-input" value="data.ok == true"></div>
+            <div class="field"><label>用户标识 · 响应字段</label><input class="d-input" value="data.userId"></div>
+          </div>
+          <button class="d-btn ghost sm cfg-test">测试连接</button>
+          <span class="toast" style="display:none;margin-left:10px"></span>
+        </div>
+      </div>
+
+      <div class="cfg-card" data-m="mail">
+        <div class="cfg-head">
+          <span class="name">邮箱验证码</span>
+          <span class="badge green">已启用 · 外部接口模式</span>
+          <label class="switch"><input type="checkbox" checked><span class="track"></span><span class="thumb"></span></label>
+        </div>
+        <div class="cfg-body">
+          <div class="kv-grid">
+            <div class="field"><label>发送验证码接口</label><input class="d-input" value="https://auth.corp.example.com/api/mail/send"></div>
+            <div class="field"><label>校验接口</label><input class="d-input" value="https://auth.corp.example.com/api/mail/verify"></div>
+            <div class="field"><label>邮箱字段名</label><input class="d-input" value="email"></div>
+            <div class="field"><label>验证码字段名</label><input class="d-input" value="code"></div>
+          </div>
+          <button class="d-btn ghost sm cfg-test">测试连接</button>
+          <span class="toast" style="display:none;margin-left:10px"></span>
+        </div>
+      </div>
+
+      <div class="cfg-card off" data-m="wx">
+        <div class="cfg-head">
+          <span class="name">微信扫码</span>
+          <span class="badge gray">未启用</span>
+          <label class="switch"><input type="checkbox"><span class="track"></span><span class="thumb"></span></label>
+        </div>
+        <div class="cfg-body">
+          <div class="kv-grid">
+            <div class="field"><label>AppID</label><input class="d-input" value="wx1234567890"></div>
+            <div class="field"><label>AppSecret</label><input class="d-input" type="password" value="********"></div>
+            <div class="field"><label>二维码获取接口（留空用官方）</label><input class="d-input" placeholder="https://api.example.com/wx/qrcode"></div>
+            <div class="field"><label>状态轮询接口（留空用官方）</label><input class="d-input" placeholder="https://api.example.com/wx/poll"></div>
+          </div>
+          <button class="d-btn ghost sm cfg-test">测试连接</button>
+          <span class="toast" style="display:none;margin-left:10px"></span>
+        </div>
+      </div>
+
+      <div class="cfg-card off" data-m="sms">
+        <div class="cfg-head">
+          <span class="name">短信验证码</span>
+          <span class="badge gray">未启用</span>
+          <label class="switch"><input type="checkbox"><span class="track"></span><span class="thumb"></span></label>
+        </div>
+        <div class="cfg-body">
+          <div class="kv-grid">
+            <div class="field"><label>短信服务商 API</label><input class="d-input" value="https://sms.example.com/v1/send"></div>
+            <div class="field"><label>API Key</label><input class="d-input" type="password" value="********"></div>
+            <div class="field"><label>模板 ID</label><input class="d-input" value="SMS-2048"></div>
+            <div class="field"><label>校验接口（留空用内置校验）</label><input class="d-input" placeholder="https://auth.corp.example.com/api/sms/verify"></div>
+          </div>
+          <button class="d-btn ghost sm cfg-test">测试连接</button>
+          <span class="toast" style="display:none;margin-left:10px"></span>
+        </div>
+      </div>
+
+    </div>
+    <div class="proto-hint">可交互：点卡片头展开 / 收起配置；拨动开关切换启用状态；"测试连接"模拟探测结果。此页仅主管理员可见。</div>
+  </div>
+  <figcaption>原型 3：登录方式配置页。每种方式独立开关 + 独立接口参数组。</figcaption>
+</figure>
+
+<h4>业务逻辑</h4>
+<p>本模块回答"每种登录方式调什么接口、带什么参数"。设计为<mark class="key">双模式</mark>：<strong>内置模式</strong>开箱即用，插件自带本地用户库，账号密码本地校验，验证码由插件配置的发送通道（SMTP 参数 / 短信服务商 API）发出，适合没有任何账号体系的个人与小团队；<strong>外部接口模式</strong>面向已有账号体系的部署者（公司统一认证、自建用户服务），每种登录方式的每个动作都映射到一个可配置的 HTTP 接口，插件按字段映射组装请求、解析响应。</p>
+
+<p>每种方式的配置项由"动作 → 接口 → 参数"三元组构成。账号密码只需一个校验接口（URL、方法、用户名/密码字段名、成功判定表达式、用户标识取值路径）；邮箱与短信各需"发送 + 校验"两个接口并共享字段映射；微信扫码需 AppID / AppSecret（走官方开放平台），或在有自建微信网关时覆盖二维码获取与轮询两个接口。所有接口配置含超时（默认 5 秒）与失败重试次数（默认 0 次）。保存时插件对配置做连通性校验（"测试连接"发送探测请求），通过后方可保存并即时生效，无需重启。</p>
+
+<h4>字段规则</h4>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>字段</th><th>类型</th><th>必填</th><th>约束</th><th>默认</th></tr></thead>
+  <tbody>
+    <tr><td>方式启用开关</td><td>布尔</td><td>是</td><td>至少启用一种方式，否则保存被拒</td><td>账号密码开，其余关</td></tr>
+    <tr><td>模式</td><td>枚举</td><td>是</td><td>内置 / 外部接口</td><td>内置</td></tr>
+    <tr><td>接口 URL</td><td>文本</td><td>外部模式必填</td><td>合法 http(s) URL</td><td>空</td></tr>
+    <tr><td>请求方法</td><td>枚举</td><td>外部模式必填</td><td>GET / POST</td><td>POST</td></tr>
+    <tr><td>字段映射</td><td>键值对</td><td>外部模式必填</td><td>键为插件标准参数名，值为目标接口字段名</td><td>预填常用名</td></tr>
+    <tr><td>成功判定表达式</td><td>文本</td><td>外部模式必填</td><td>对响应 JSON 的取值/比较表达式</td><td><code>data.ok == true</code></td></tr>
+    <tr><td>超时</td><td>数字</td><td>否</td><td>1–30 秒</td><td>5</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="callout warn">
+  <div class="t">安全约束</div>
+  外部接口模式的探测与调用均从 Host 侧发起；接口返回的用户标识仅用于匹配本地租户，插件不在日志与前端落盘明文密码或验证码；AppSecret、API Key 类配置项保存后界面仅显示掩码。
+</div>
+
+<!-- ---------------- FR-4 ---------------- -->
+<h3 id="fr-4"><span class="no">FR-4</span>工作区与会话隔离 <span class="badge indigo">P0</span></h3>
+
+<figure class="proto">
+  <div class="proto-frame">
+    <div class="proto-chrome">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="url">127.0.0.1:3080 · 切换用户观察隔离效果</span>
+    </div>
+    <div class="proto-body" id="demo-iso">
+      <div class="user-chips">
+        <button class="u-chip active" data-u="alice"><span class="av" style="background:#4F46E5">A</span>alice · 主管理员</button>
+        <button class="u-chip" data-u="bob"><span class="av" style="background:#0EA5E9">B</span>bob · 子用户</button>
+        <button class="u-chip" data-u="carol"><span class="av" style="background:#0F9D6E">C</span>carol · 子用户</button>
+      </div>
+      <div class="iso-grid">
+        <div class="iso-col">
+          <div class="d-label">我的工作区</div>
+          <div id="iso-ws"></div>
+        </div>
+        <div class="iso-col">
+          <div class="d-label">我的插件</div>
+          <div class="plug-chips" id="iso-plugs"></div>
+          <div class="d-label" style="margin-top:14px">其他</div>
+          <div style="font-size:0.82rem;color:var(--muted)" id="iso-meta"></div>
+        </div>
+      </div>
+    </div>
+    <div class="proto-hint">可交互：点击顶部用户切换，观察左右两栏（工作区 / 插件 / 会话数 / 可用模型）随之整体变化。</div>
+  </div>
+  <figcaption>原型 4：三个用户的租户环境对比。每个用户进来看到的工作区与插件互不相同。</figcaption>
+</figure>
+
+<h4>业务逻辑</h4>
+<p>隔离的落点是 dsh 的两个全局列表：<strong>工作区列表</strong>与<strong>会话历史</strong>。启用后，这两份列表按登录身份过滤——每个租户环境持有独立的工作区授权集合与会话存储命名空间，用户 A 的工作区目录、会话记录、附件与运行轨迹对用户 B 完全不可见，反之亦然。主管理员额外持有全部工作区的可见性与目录授权管理权。</p>
+
+<p>工作区采用<mark class="key">授权制</mark>而非自由浏览制：新用户默认没有任何工作区，主管理员在用户管理页为其授权一个或多个主机目录（或在该用户租户目录下新建空工作区），用户登录后只能在授权集合内选择与切换。会话内文件操作沿用 dsh 原生沙箱（workspace-write 限制在当前工作区内<sup><a href="#cite-2">[2]</a></sup>），插件不改变沙箱行为，只在入口层收敛"哪些目录可以成为工作区"。会话数据按用户命名空间分目录存储，登录后 dsh 原生的会话恢复、历史列表、轨迹回放功能照常工作，只是数据源被限定为本命名空间。</p>
+
+<h4>边界与例外</h4>
+<ul class="plain">
+  <li>两个用户被授权同一目录时，插件给出显著提示（共享目录会互相看到对方会话产物文件），由管理员决策是否保留。</li>
+  <li>用户被移除授权时，其进行中的会话立即终止；历史会话保留在本人命名空间内，仅列表不可再进入该工作区。</li>
+  <li>子用户的租户数据目录（工作区文件、会话）不因停用账号而删除，卸载插件时的数据处置遵循 FR-1。</li>
+</ul>
+
+<!-- ---------------- FR-5 ---------------- -->
+<h3 id="fr-5"><span class="no">FR-5</span>插件可见性与子用户默认插件 <span class="badge indigo">P0</span></h3>
+
+<figure class="proto">
+  <div class="proto-frame">
+    <div class="proto-chrome">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="url">127.0.0.1:3080 · 用户管理 → 新建子用户</span>
+    </div>
+    <div class="proto-body" id="demo-sub">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="d-label" style="margin:0">子用户列表</div>
+        <button class="d-btn sm" id="sub-open">＋ 新建子用户</button>
+      </div>
+      <div class="sub-list" id="sub-list"></div>
+
+      <div class="dialog-mask" id="sub-mask">
+        <div class="dialog">
+          <h5>新建子用户</h5>
+          <div class="kv-grid">
+            <div class="field"><label>用户名</label><input class="d-input" id="sub-name" placeholder="例如 bob"></div>
+            <div class="field"><label>显示名</label><input class="d-input" id="sub-display" placeholder="鲍勃"></div>
+            <div class="field"><label>初始登录方式</label><select class="d-select" id="sub-method"><option>账号密码（生成初始密码）</option><option>邮箱验证码</option><option>短信验证码</option></select></div>
+            <div class="field"><label>邮箱 / 手机（验证码方式用）</label><input class="d-input" id="sub-contact" placeholder="bob@example.com"></div>
+          </div>
+          <div class="field"><label>默认开放的插件（可后续调整）</label></div>
+          <div class="plug-checks" id="sub-plugs"></div>
+          <div class="toast" id="sub-toast"></div>
+          <div class="dialog-actions">
+            <button class="d-btn ghost sm" id="sub-cancel">取消</button>
+            <button class="d-btn sm" id="sub-create">创建</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="proto-hint">可交互：点击"新建子用户"打开弹窗，尝试勾选 dsh-vision-router（会自动带出依赖 modlens 的提示），创建后用户追加进列表。</div>
+  </div>
+  <figcaption>原型 5：新建子用户时指定默认开放插件。依赖检查借鉴插件管理器的健康检查思路。</figcaption>
+</figure>
+
+<h4>业务逻辑</h4>
+<p>插件的<strong>安装</strong>与<strong>可见</strong>是两件事：安装由主管理员全局操作（沿用 dsh 官方 CLI 或插件市场），安装后的插件进入"可分配池"；<mark class="key">可见性按用户授予</mark>——每个子用户持有一个被授权插件集合，dsh 界面的插件列表、插件设置页、会话内插件能力均按该集合过滤，未授权插件对该用户等于不存在。主管理员默认可见全部已安装插件。</p>
+
+<p><strong>新建子用户时指定默认开放插件</strong>是本模块的核心交互：创建表单中列出可分配池，管理员勾选该用户初始可用的插件；勾选存在依赖的插件时（例：视觉类插件依赖模型工具插件），界面自动带出依赖提示并可一键连选依赖项——依赖关系数据来自插件清单，校验思路对齐 dsh-web-plugin-manager 的依赖 / 冲突分析<sup><a href="#cite-8">[8]</a></sup>。存量用户的插件授权可随时增删，调整即时生效（用户下次加载页面即更新，进行中的会话不受影响直到其结束）。</p>
+
+<p>子用户不能安装、卸载或更新插件，也不能看到"未分配给自己"的插件条目；插件市场类页面（若管理员安装了市场插件）对子用户同样按授权过滤展示与操作。全局插件启停（影响所有人的操作）仅管理员面板可见。</p>
+
+<!-- ---------------- FR-6 ---------------- -->
+<h3 id="fr-6"><span class="no">FR-6</span>模型配置权限 <span class="badge indigo">P0</span></h3>
+
+<figure class="proto">
+  <div class="proto-frame">
+    <div class="proto-chrome">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="url">127.0.0.1:3080 · 设置 → 模型（两种视角）</span>
+    </div>
+    <div class="proto-body" id="demo-mp">
+      <div class="mp-toggle">
+        <button class="active" data-v="owner">以主管理员查看</button>
+        <button data-v="member">以子用户查看</button>
+      </div>
+
+      <div id="mp-owner">
+        <div class="provider-card">
+          <div class="row1"><span class="pname">DeepSeek 官方 API</span><span class="badge green">已连接</span><button class="d-btn ghost sm">编辑</button><button class="d-btn ghost sm">测试</button></div>
+          <div class="keyline">sk-*****************************3f9a · 默认模型 DeepSeek-V4-Pro</div>
+        </div>
+        <div class="provider-card">
+          <div class="row1"><span class="pname">OpenAI 兼容 · 自定义网关</span><span class="badge green">已连接</span><button class="d-btn ghost sm">编辑</button><button class="d-btn ghost sm">测试</button></div>
+          <div class="keyline">sk-*****************************7c02 · 默认模型 glm-5-air</div>
+        </div>
+        <div class="provider-card">
+          <div class="row1"><span class="pname">Kimi Code（AuthInOne 登录）</span><span class="badge amber">实验性</span><button class="d-btn ghost sm">编辑</button><button class="d-btn danger sm">登出</button></div>
+          <div class="keyline">OAuth 凭据 · 刷新于 2 小时前</div>
+        </div>
+        <button class="d-btn ghost sm">＋ 添加提供商</button>
+      </div>
+
+      <div id="mp-member" style="display:none">
+        <div class="mp-note">模型与 API Key 由主管理员统一配置，如需新增模型请联系管理员。</div>
+        <div class="provider-card">
+          <div class="row1"><span class="pname">DeepSeek 官方 API</span><span class="badge indigo">可用</span></div>
+          <div class="field" style="margin-top:8px"><label>我的默认模型</label>
+            <select class="d-select"><option>DeepSeek-V4-Pro</option><option>DeepSeek-V4-Flash</option></select>
+          </div>
+        </div>
+        <div class="provider-card">
+          <div class="row1"><span class="pname">OpenAI 兼容 · 自定义网关</span><span class="badge gray">未对你开放</span></div>
+          <div style="font-size:0.8rem;color:var(--muted)">该提供商未加入你的可用模型集合</div>
+        </div>
+      </div>
+    </div>
+    <div class="proto-hint">可交互：切换顶部视角。管理员视角可增删改提供商；子用户视角无任何 Key 信息与编辑入口，只能选择默认模型。</div>
+  </div>
+  <figcaption>原型 6：模型设置页的权限分视角渲染。</figcaption>
+</figure>
+
+<h4>业务逻辑</h4>
+<p>模型提供商、API Key、OAuth 登录、Base URL 与模型映射这些配置的<mark class="key">写权限收敛到主管理员一人</mark>：设置 → 模型页对子用户渲染为只读视图。管理员可进一步指定"对全员开放的模型集合"（按提供商或按具体模型粒度），子用户在该集合内选择自己的默认模型与会话内模型（dsh 原生的会话级模型选择器保留，但选项被限定在开放集合内）；集合外的提供商在子用户视角显示"未对你开放"或不显示，两种展示策略由管理员设置决定。</p>
+
+<p>凭据可见性遵循"只紧不松"原则：dsh 原生设计中页面本就只能拿到 Key 的脱敏描述符、真实凭据存于 Host 侧 <code>.credentials.yaml</code><sup><a href="#cite-12">[12]</a></sup>；本插件进一步把脱敏描述符也从子用户界面移除。子用户的任何请求由 Host 按管理员配置的提供商路由，全程不接触凭据材料。管理员在用户维度可设置"默认模型"，新建用户时沿用，用户可自行覆盖（若管理员未锁定）。</p>
+
+<!-- ---------------- FR-7 ---------------- -->
+<h3 id="fr-7"><span class="no">FR-7</span>综合增强能力（吸收现有插件功能）<span class="badge indigo">P1</span></h3>
+
+<p>以下能力不是多租户的必要条件，但都是调研中已被验证的高价值功能，在多租户语境下价值放大，规划为首个可用版本之后的第二批交付：</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th style="width:24%">能力</th><th style="width:20%">借鉴来源</th><th>多租户下的增量价值</th></tr></thead>
+  <tbody>
+    <tr><td>按用户用量统计与成本分账</td><td class="mono">dsh-usage-stats<sup><a href="#cite-10">[10]</a></sup> / dsh-cost-meter</td><td>把 token 热力图、费用统计从"按模型"扩展出"按用户"维度：管理员看全员，用户看自己；共享一个 API Key 的成本第一次可以算清归属</td></tr>
+    <tr><td>用户配额与限速</td><td>（生态空白，配额语义源自多租户刚需）</td><td>按用户设日 / 月 token 或请求次数上限，超额提醒或限流，防止个别用户吃光共享额度</td></tr>
+    <tr><td>插件依赖与冲突检查</td><td class="mono">dsh-web-plugin-manager<sup><a href="#cite-8">[8]</a></sup></td><td>在给子用户分配插件时即时校验依赖完整性与版本冲突，分配面板内置健康检查</td></tr>
+    <tr><td>配置快照与一键回滚</td><td class="mono">dsh-undo-plugin<sup><a href="#cite-9">[9]</a></sup></td><td>每次启用 / 停用 / 升级前自动快照多租户配置，出问题一键回到上一个已知良好状态</td></tr>
+    <tr><td>操作审计日志</td><td>（多租户合规刚需）</td><td>记录登录、授权变更、插件分配、模型配置修改的操作者与时间，供管理员回溯"谁改了什么"</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ================================================= 6 安全 ================================================= -->
+<h2 id="sec-6"><span class="no">6</span>安全与数据边界</h2>
+
+<ul class="plain">
+  <li><strong>口令存储</strong>：内置模式的密码必须以不可逆哈希（加盐）存储，任何界面、日志、导出物中不得出现明文密码或验证码。</li>
+  <li><strong>会话安全</strong>：登录会话使用 HttpOnly Cookie，有效期与续期策略可配；登出即失效；启用登录墙后所有 API 端点同样要求有效会话。</li>
+  <li><strong>凭据边界不放松</strong>：模型 API Key、OAuth 令牌仅存 Host 侧 dsh 凭据体系，与 dsh 原生行为一致<sup><a href="#cite-12">[12]</a></sup>；本插件不复制、不导出、不向浏览器下发凭据材料，子用户界面连脱敏描述符也不展示。</li>
+  <li><strong>外部认证接口</strong>：仅接受管理员配置的固定 URL；请求超时与失败有明确上限；认证接口返回体中除用户标识外的字段一律丢弃，不进入插件存储。</li>
+  <li><strong>租户数据归属</strong>：插件只管理路由与可见性，不复制用户工作区文件；租户数据集中存于插件数据目录下按用户隔离的命名空间（目录布局与文件载体见第 7 章），卸载时的处置选项见 FR-1。</li>
+  <li><strong>最小替换原则</strong>：替换官方设置组件时只挂载必要的组合点，卸载时还原官方组件——对齐 AuthInOne 已验证的边界做法<sup><a href="#cite-6">[6]</a></sup>。</li>
+</ul>
+
+<!-- ================================================= 7 数据存储 ================================================= -->
+<h2 id="sec-7"><span class="no">7</span>数据存储设计</h2>
+
+<p class="lead">存储设计遵循三条约束：<mark class="key">零外部依赖</mark>（不引入 MySQL / Redis 等外部服务，NAS 与家用服务器开箱可用）、<mark class="key">自包含可备份</mark>（一个数据目录打包即完整备份）、<mark class="key">命名空间映射而非复制</mark>（会话历史等大体积数据仍存 dsh 原生存储，插件只维护映射）。首个可用版本以带原子写入的 JSON 文件为载体；P1 起引入嵌入式 SQLite（单文件，仍无服务依赖）承载用量与审计的聚合查询。</p>
+
+<h3><span class="no">7.1</span>目录布局</h3>
+
+<p>所有插件数据集中落在 <code>$DSH_HOME</code> 下的插件数据目录，与 dsh 原生文件（profiles、<code>settings.yaml</code>、<code>.credentials.yaml</code>）物理分离，互不污染：</p>
+
+<div class="dirtree">$DSH_HOME/
+└─ plugins-data/dsh-multi-user/
+   ├─ settings.json            <span class="cm"># 插件级配置：启用状态、主管理员绑定、登录方式开关、开放模型集合</span>
+   ├─ users.json               <span class="cm"># 用户库：用户 ID、角色、认证方式绑定、加盐口令哈希、状态</span>
+   ├─ sessions.json            <span class="cm"># 活动会话表：会话令牌哈希 → 用户 ID、过期时间</span>
+   ├─ tenants/
+   │  └─ u_8f3a…/              <span class="cm"># 每用户一个租户目录（以内部 ID 命名，重命名用户不受影响）</span>
+   │     ├─ grants.json        <span class="cm"># 工作区目录授权、插件可见集、模型选择集</span>
+   │     ├─ preferences.json   <span class="cm"># 默认模型等个性化设置</span>
+   │     ├─ sessions/          <span class="cm"># dsh 会话历史命名空间（映射原生存储，见 7.3）</span>
+   │     └─ usage.jsonl        <span class="cm"># 用量流水（追加写，FR-7 按用户分账的数据源）</span>
+   ├─ audit.jsonl              <span class="cm"># 全局审计日志：登录、授权变更、插件分配、模型配置修改</span>
+   └─ snapshots/               <span class="cm"># 启用 / 停用 / 升级前的配置快照（对齐 undo 机制[9]）</span></div>
+
+<h3><span class="no">7.2</span>数据分类与职责</h3>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th style="width:18%">数据类别</th><th style="width:24%">载体</th><th style="width:20%">写入方</th><th>生命周期</th></tr></thead>
+  <tbody>
+    <tr><td>插件配置</td><td class="mono">settings.json</td><td>仅 Host 进程（管理员操作）</td><td>停用保留；卸载时随数据目录按 FR-1 处置</td></tr>
+    <tr><td>用户账户与口令哈希</td><td class="mono">users.json</td><td>仅 Host 进程（管理员操作）</td><td>删除用户后条目匿名化保留（供审计追溯），不留口令哈希</td></tr>
+    <tr><td>登录会话</td><td class="mono">sessions.json</td><td>Host（认证适配器）</td><td>登出或过期即删除；停用时全量失效</td></tr>
+    <tr><td>授权与偏好</td><td class="mono">grants.json / preferences.json</td><td>Host（管理员授权；用户改自己的偏好）</td><td>停用保留；卸载时随租户目录处置</td></tr>
+    <tr><td>会话历史与附件</td><td>dsh 原生会话存储 + 命名空间映射</td><td>dsh 原生机制</td><td>不复制、不迁移；卸载后原生数据完整可读</td></tr>
+    <tr><td>用量流水</td><td class="mono">usage.jsonl（P1 起 SQLite 聚合）</td><td>Host 代理层自动追加</td><td>明细默认保留 180 天（可配）；聚合视图可由流水重建</td></tr>
+    <tr><td>审计日志</td><td class="mono">audit.jsonl</td><td>Host 自动追加</td><td>默认保留 365 天（可配），按大小轮转</td></tr>
+    <tr><td>模型凭据</td><td>dsh 原生 <span class="mono">.credentials.yaml</span></td><td>仅主管理员经原生体系</td><td><strong>不落本插件</strong>——与插件数据目录完全隔离，卸载不受影响</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3><span class="no">7.3</span>存储原则</h3>
+<ul class="plain">
+  <li><strong>原子写入</strong>：所有 JSON 文件写入一律走临时文件 + rename，进程崩溃不产生半写文件；多写并发由 Host 单点串行化，插件数据不出现多写者。</li>
+  <li><strong>文件权限</strong>：数据目录与文件按最小权限收紧（Unix 下 0700 / 0600，Windows 下等价 ACL），确保同机其他系统用户不可读；口令哈希采用 argon2id / bcrypt（加盐，见第 6 章）。</li>
+  <li><strong>命名空间映射</strong>：每个用户的 dsh 会话历史存于原生会话存储中独立的命名空间（<code>tenants/&lt;uid&gt;/sessions</code> 维护映射表），插件不复制、不改写原生文件——这是"未启用态 / 卸载后行为与原版一致"承诺的基础。</li>
+  <li><strong>追加不可改</strong>：<code>usage.jsonl</code> 与 <code>audit.jsonl</code> 为 append-only 流水，作为分账与审计可信度的基底；聚合报表只是衍生视图，可随时从流水重建。</li>
+  <li><strong>自包含备份</strong>：打包 <code>plugins-data/dsh-multi-user/</code> 即得完整备份，恢复即解压；配合 <code>snapshots/</code> 可回到任一启用 / 升级前的状态。README 提供备份与迁移命令示例。</li>
+  <li><strong>无外联</strong>：数据目录内的一切文件仅由本插件读写，不向任何外部地址发送；与第 6 章的凭据与认证边界一致。</li>
+</ul>
+
+<!-- ================================================= 8 兼容 ================================================= -->
+<h2 id="sec-8"><span class="no">8</span>兼容与性能约束</h2>
+
+<ul class="plain">
+  <li><strong>版本声明</strong>：dsh 处于 developer preview 快速演进期，每个发布版必须声明验证过的 dsh 版本 / commit（对齐 AuthInOne 的 exact-compat 声明与"未知宿主即拒绝安装"策略<sup><a href="#cite-6">[6]</a></sup>），不兼容版本给出明确错误而非静默运行。</li>
+  <li><strong>还原性验证</strong>：卸载后 <code>dsh web --dump-config</code> 输出与安装前一致；未启用态的页面加载行为与未安装时无可感知差异。</li>
+  <li><strong>性能预算</strong>：登录墙对已登录用户的常规页面加载增加开销不超过 200ms；认证接口调用默认 5 秒超时；用户切换、插件可见性过滤在服务端完成，不向客户端下发全量列表再过滤。</li>
+  <li><strong>界面语言</strong>：UI 文案中英双语（社区插件惯例），README 同步双语。</li>
+  <li><strong>安装方式</strong>：一条命令安装到 web profile（<code>dsh plugin --profile web add …</code>），不要求二次端口、手动改 profile YAML 或内核补丁。</li>
+</ul>
+
+</main>
+
+<footer>
+  <div class="sources">
+    <h2>参考资料</h2>
+    <ol>
+      <li id="cite-1"><span class="src-title">DeepSeek，Harness 官方产品页：Everything is a plugin（Cordis 内核与插件架构说明）。</span><a class="src-url" href="https://deepseek.com/harness/en/" target="_blank" rel="noopener">https://deepseek.com/harness/en/</a></li>
+      <li id="cite-2"><span class="src-title">deepseek-ai/deepseek-harness，官方开源仓库（MIT，dsh 运行时与插件机制）。</span><a class="src-url" href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" rel="noopener">https://github.com/deepseek-ai/deepseek-harness</a></li>
+      <li id="cite-3"><span class="src-title">新浪财经，2026-08-17：UCloud 插件接入 DeepSeek Harness（12 万+ Star、5700+ 插件仓库等生态规模数据）。</span><a class="src-url" href="http://finance.sina.cn/2026-08-17/detail-ininrkkm6890334.d.html" target="_blank" rel="noopener">http://finance.sina.cn/2026-08-17/detail-ininrkkm6890334.d.html</a></li>
+      <li id="cite-4"><span class="src-title">x-cmd，deepseek-harness 安装页（npx @deepseek-ai/dsh web、127.0.0.1:3080 运行形态）。</span><a class="src-url" href="https://www.x-cmd.com/install/deepseek-harness/" target="_blank" rel="noopener">https://www.x-cmd.com/install/deepseek-harness/</a></li>
+      <li id="cite-5"><span class="src-title">dsh-plugins.top，DSH 插件精选目录（2026-08-17 快照：307 款插件、10 分类、23772 Star）。</span><a class="src-url" href="http://dsh-plugins.top/" target="_blank" rel="noopener">http://dsh-plugins.top/</a></li>
+      <li id="cite-6"><span class="src-title">Stormycry-cryp/dsh-AuthInOne，提供商登录 / API Key 管理 / 用量统计插件（同端口自装、卸载还原官方组件、凭证边界）。</span><a class="src-url" href="https://github.com/Stormycry-cryp/dsh-AuthInOne" target="_blank" rel="noopener">https://github.com/Stormycry-cryp/dsh-AuthInOne</a></li>
+      <li id="cite-7"><span class="src-title">AITabby/dockyard-dsh，macOS 账号池与提供商插件（多账号导入与调度策略）。</span><a class="src-url" href="https://github.com/AITabby/dockyard-dsh" target="_blank" rel="noopener">https://github.com/AITabby/dockyard-dsh</a></li>
+      <li id="cite-8"><span class="src-title">LX2000WASD/dsh-web-plugin-manager，Web UI 插件管理面板（启停 / 安装 / 健康检查 / 市场）。</span><a class="src-url" href="https://github.com/LX2000WASD/dsh-web-plugin-manager" target="_blank" rel="noopener">https://github.com/LX2000WASD/dsh-web-plugin-manager</a></li>
+      <li id="cite-9"><span class="src-title">lire1131/dsh-undo-plugin，DSH 配置撤销与安全模式插件（快照 / 回滚 / 离线救援）。</span><a class="src-url" href="https://github.com/lire1131/dsh-undo-plugin" target="_blank" rel="noopener">https://github.com/lire1131/dsh-undo-plugin</a></li>
+      <li id="cite-10"><span class="src-title">Ychris12138/dsh-usage-stats，token 用量热力图与按模型统计插件。</span><a class="src-url" href="https://github.com/Ychris12138/dsh-usage-stats" target="_blank" rel="noopener">https://github.com/Ychris12138/dsh-usage-stats</a></li>
+      <li id="cite-11"><span class="src-title">NanmiCoder/dsh-agent-teams，子 Agent 团队协作插件（与本插件的"用户团队"定位区分）。</span><a class="src-url" href="https://github.com/NanmiCoder/dsh-agent-teams" target="_blank" rel="noopener">https://github.com/NanmiCoder/dsh-agent-teams</a></li>
+      <li id="cite-12"><span class="src-title">CSDN（ofoxcoding），DeepSeek Harness 接入任意模型的完整配置教程（$DSH_HOME、profiles、.credentials.yaml 结构与"共享 profile 不共享凭据"结论）。</span><a class="src-url" href="https://deepseek.csdn.net/6a7ecf8d662f9a54cb9cad7d.html" target="_blank" rel="noopener">https://deepseek.csdn.net/6a7ecf8d662f9a54cb9cad7d.html</a></li>
+      <li id="cite-13"><span class="src-title">Nervlet/deepseek-helmsman，pi harness 的 DeepSeek-only fork（/login 与本地凭据存储先例）。</span><a class="src-url" href="https://github.com/Nervlet/deepseek-helmsman" target="_blank" rel="noopener">https://github.com/Nervlet/deepseek-helmsman</a></li>
+      <li id="cite-14"><span class="src-title">AnkoCD/dsh-server-deployment（曾用名 dsh-multi-user-gateway），DeepSeek Harness Web 多用户网关部署方案（独立网关形态的多人共用先例，2026-08-17 核验）。</span><a class="src-url" href="https://github.com/AnkoCD/dsh-server-deployment" target="_blank" rel="noopener">https://github.com/AnkoCD/dsh-server-deployment</a></li>
+    </ol>
+  </div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  function $(sel, root) { return (root || document).querySelector(sel); }
+  function $all(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+  function showToast(el, msg, type) {
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'toast ' + (type || 'ok');
+  }
+  function hideToast(el) { if (el) el.className = 'toast'; }
+
+  /* ================= Demo 1 生命周期 ================= */
+  (function () {
+    var root = $('#demo-lc');
+    if (!root) return;
+    var badge = $('#lc-badge'), adminName = $('#lc-admin-name');
+    var setupBtn = $('#lc-setup-btn'), enableBtn = $('#lc-enable-btn'), disableBtn = $('#lc-disable-btn');
+    var form = $('#lc-admin-form'), err = $('#lc-a-err'), overlay = $('#lc-overlay');
+    var adminSet = false, enabled = false;
+
+    setupBtn.addEventListener('click', function () {
+      if (enabled) return;
+      form.classList.toggle('show');
+      hideToast(err);
+    });
+    $('#lc-a-cancel').addEventListener('click', function () { form.classList.remove('show'); });
+
+    $('#lc-a-save').addEventListener('click', function () {
+      var u = $('#lc-a-username').value.trim();
+      var p1 = $('#lc-a-pw').value, p2 = $('#lc-a-pw2').value;
+      if (!u) return showToast(err, '请输入管理员用户名', 'err');
+      if (p1.length < 6) return showToast(err, '初始密码至少 6 位', 'err');
+      if (p1 !== p2) return showToast(err, '两次输入的密码不一致', 'err');
+      adminSet = true;
+      adminName.textContent = u + '（' + $('#lc-a-method').value + '）';
+      form.classList.remove('show');
+      enableBtn.disabled = false;
+      setupBtn.textContent = '修改主管理员';
+      hideToast(err);
+    });
+
+    enableBtn.addEventListener('click', function () {
+      overlay.classList.add('show');
+      setTimeout(function () {
+        enabled = true;
+        overlay.classList.remove('show');
+        badge.textContent = '已启用';
+        badge.className = 'badge green';
+        enableBtn.style.display = 'none';
+        disableBtn.style.display = '';
+        setupBtn.style.display = 'none';
+        form.classList.remove('show');
+      }, 1700);
+    });
+
+    disableBtn.addEventListener('click', function () {
+      enabled = false;
+      badge.textContent = '未启用';
+      badge.className = 'badge gray';
+      disableBtn.style.display = 'none';
+      enableBtn.style.display = '';
+      setupBtn.style.display = '';
+    });
+  })();
+
+  /* ================= Demo 2 登录 ================= */
+  (function () {
+    var root = $('#demo-login');
+    if (!root) return;
+    var box = $('#login-box'), success = $('#login-success'), info = $('#login-success-info');
+
+    $all('#login-tabs button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        $all('#login-tabs button').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        $all('.login-panel').forEach(function (p) {
+          p.classList.toggle('active', p.getAttribute('data-panel') === btn.getAttribute('data-tab'));
+        });
+      });
+    });
+
+    function login(name, role) {
+      box.style.display = 'none';
+      success.style.display = 'block';
+      info.textContent = '欢迎回来，' + name + ' · ' + (role || '正在进入你的工作台…');
+    }
+    $('#lg-reset').addEventListener('click', function () {
+      success.style.display = 'none';
+      box.style.display = '';
+      $all('.login-panel input').forEach(function (i) { i.value = ''; });
+      $all('.toast', root).forEach(hideToast);
+      resetQr();
+    });
+
+    $('#lg-pw-btn').addEventListener('click', function () {
+      var u = $('#lg-user').value.trim(), p = $('#lg-pw').value;
+      var t = $('#lg-pw-toast');
+      if (!u || p.length < 6) return showToast(t, '请输入用户名与至少 6 位密码', 'err');
+      showToast(t, '校验通过，正在建立会话…', 'ok');
+      setTimeout(function () { login(u, '主管理员视角'); }, 600);
+    });
+
+    function countdown(btn) {
+      var left = 60;
+      btn.disabled = true;
+      btn.textContent = left + 's';
+      var timer = setInterval(function () {
+        left--;
+        if (left <= 0) { clearInterval(timer); btn.disabled = false; btn.textContent = '获取验证码'; }
+        else btn.textContent = left + 's';
+      }, 1000);
+    }
+
+    $('#lg-mail-send').addEventListener('click', function () {
+      var m = $('#lg-mail').value.trim(), t = $('#lg-mail-toast');
+      if (m.indexOf('@') < 0) return showToast(t, '请输入有效邮箱', 'err');
+      showToast(t, '验证码已发送至 ' + m, 'ok');
+      countdown(this);
+    });
+    $('#lg-mail-btn').addEventListener('click', function () {
+      var t = $('#lg-mail-toast'), c = $('#lg-mail-code').value.trim();
+      if (!/^\d{6}$/.test(c)) return showToast(t, '请输入 6 位数字验证码', 'err');
+      showToast(t, '校验通过…', 'ok');
+      setTimeout(function () { login($('#lg-mail').value.split('@')[0], '子用户视角'); }, 600);
+    });
+
+    $('#lg-sms-send').addEventListener('click', function () {
+      var p = $('#lg-phone').value.trim(), t = $('#lg-sms-toast');
+      if (!/^1\d{10}$/.test(p)) return showToast(t, '请输入 11 位手机号', 'err');
+      showToast(t, '验证码已发送至 ' + p.slice(0, 3) + '****' + p.slice(7), 'ok');
+      countdown(this);
+    });
+    $('#lg-sms-btn').addEventListener('click', function () {
+      var t = $('#lg-sms-toast'), c = $('#lg-sms-code').value.trim();
+      if (!/^\d{6}$/.test(c)) return showToast(t, '请输入 6 位数字验证码', 'err');
+      showToast(t, '校验通过…', 'ok');
+      setTimeout(function () { login('user_' + $('#lg-phone').value.slice(7), '子用户视角'); }, 600);
+    });
+
+    /* 微信扫码三态 */
+    var qrState = 0;
+    function drawQr() {
+      var n = 21, cell = 6, s = '';
+      var seed = 42;
+      function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+      function finder(x, y) {
+        s += '<rect x="' + x * cell + '" y="' + y * cell + '" width="' + cell * 7 + '" height="' + cell * 7 + '" fill="none" stroke="#191D2E" stroke-width="' + cell + '"/>';
+        s += '<rect x="' + (x + 2) * cell + '" y="' + (y + 2) * cell + '" width="' + cell * 3 + '" height="' + cell * 3 + '" fill="#191D2E"/>';
+      }
+      for (var y = 0; y < n; y++) {
+        for (var x = 0; x < n; x++) {
+          var inFinder = (x < 8 && y < 8) || (x > n - 9 && y < 8) || (x < 8 && y > n - 9);
+          if (!inFinder && rnd() > 0.52) s += '<rect x="' + x * cell + '" y="' + y * cell + '" width="' + cell + '" height="' + cell + '" fill="#191D2E"/>';
+        }
+      }
+      finder(0, 0); finder(n - 7, 0); finder(0, n - 7);
+      $('#qr-box').innerHTML = '<svg width="' + n * cell + '" height="' + n * cell + '" viewBox="0 0 ' + n * cell + ' ' + n * cell + '">' + s + '</svg>';
+    }
+    function resetQr() {
+      qrState = 0; drawQr();
+      var st = $('#qr-status');
+      st.textContent = '打开微信扫一扫';
+      st.className = 'qr-status';
+      hideToast($('#lg-wx-toast'));
+    }
+    $('#qr-sim').addEventListener('click', function () {
+      var st = $('#qr-status');
+      if (qrState === 0) {
+        qrState = 1;
+        st.textContent = '已扫码，请在手机上确认';
+        st.className = 'qr-status';
+        setTimeout(function () {
+          if (qrState !== 1) return;
+          qrState = 2;
+          st.textContent = '确认登录';
+          st.className = 'qr-status ok';
+          setTimeout(function () {
+            if (qrState === 2) login('wx_user', '子用户视角');
+          }, 800);
+        }, 1200);
+      }
+    });
+    resetQr();
+  })();
+
+  /* ================= Demo 3 认证方式配置 ================= */
+  (function () {
+    var root = $('#demo-cfg');
+    if (!root) return;
+    $all('.cfg-card').forEach(function (card) {
+      $('.cfg-head', card).addEventListener('click', function (e) {
+        if (e.target.closest('.switch')) return;
+        card.classList.toggle('open');
+      });
+      var sw = $('.switch input', card);
+      var badge = $('.badge', card);
+      sw.addEventListener('change', function () {
+        card.classList.toggle('off', !sw.checked);
+        if (sw.checked) { badge.textContent = '已启用 · 外部接口模式'; badge.className = 'badge green'; }
+        else { badge.textContent = '未启用'; badge.className = 'badge gray'; }
+      });
+      var test = $('.cfg-test', card);
+      test.addEventListener('click', function () {
+        var toast = test.parentElement.querySelector('.toast');
+        var old = test.textContent;
+        test.textContent = '测试中…'; test.disabled = true;
+        setTimeout(function () {
+          test.textContent = old; test.disabled = false;
+          var latency = 80 + Math.floor(Math.random() * 120);
+          toast.className = 'toast ok';
+          toast.style.display = 'inline-block';
+          toast.textContent = '连接成功 · 200 OK · 延迟 ' + latency + 'ms';
+        }, 900);
+      });
+    });
+  })();
+
+  /* ================= Demo 4 隔离 ================= */
+  (function () {
+    var root = $('#demo-iso');
+    if (!root) return;
+    var data = {
+      alice: {
+        color: '#4F46E5',
+        ws: [
+          { name: '全公司项目库', path: '/srv/projects' },
+          { name: 'alice · 个人工作区', path: '~/.dsh/tenants/alice/ws' },
+          { name: '共享 · 文档整理', path: '/srv/shared/docs' }
+        ],
+        plugs: { on: ['dsh-web-ui', 'dsh-market', 'dsh-usage-stats', 'modlens', 'dsh-vision-router', 'dsh-undo-plugin', 'dsh-notification', 'graph-memory'], off: [] },
+        meta: '会话 47 条 · 可用模型：全部 · 角色：主管理员（可见一切、可授权）'
+      },
+      bob: {
+        color: '#0EA5E9',
+        ws: [
+          { name: 'bob · 工作区', path: '~/.dsh/tenants/bob/ws' },
+          { name: '前端项目', path: '/srv/projects/frontend' }
+        ],
+        plugs: { on: ['dsh-at-file', 'dsh-context', 'modlens'], off: ['dsh-market', 'dsh-usage-stats'] },
+        meta: '会话 12 条 · 可用模型：DeepSeek-V4-Pro / Flash · 角色：子用户'
+      },
+      carol: {
+        color: '#0F9D6E',
+        ws: [
+          { name: 'carol · 工作区', path: '~/.dsh/tenants/carol/ws' }
+        ],
+        plugs: { on: ['modlens', 'dsh-at-file'], off: ['dsh-web-ui', 'dsh-vision-router'] },
+        meta: '会话 3 条 · 可用模型：DeepSeek-V4-Flash · 角色：子用户（新建，仅默认插件）'
+      }
+    };
+    function render(uid) {
+      var d = data[uid];
+      $('#iso-ws').innerHTML = d.ws.map(function (w) {
+        return '<div class="ws-item"><span>' + w.name + '</span><span class="path">' + w.path + '</span></div>';
+      }).join('');
+      var chips = d.plugs.on.map(function (p) { return '<span class="plug-chip">' + p + '</span>'; })
+        .concat(d.plugs.off.map(function (p) { return '<span class="plug-chip dim">' + p + '</span>'; }));
+      $('#iso-plugs').innerHTML = chips.join('');
+      $('#iso-meta').innerHTML = d.meta + '<br>灰色删除线 = 该用户未被授权的插件';
+      $all('.u-chip', root).forEach(function (c) { c.classList.toggle('active', c.getAttribute('data-u') === uid); });
+    }
+    $all('.u-chip', root).forEach(function (c) {
+      c.addEventListener('click', function () { render(c.getAttribute('data-u')); });
+    });
+    render('alice');
+  })();
+
+  /* ================= Demo 5 模型权限 ================= */
+  (function () {
+    var root = $('#demo-mp');
+    if (!root) return;
+    $all('.mp-toggle button', root).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        $all('.mp-toggle button', root).forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        var isOwner = btn.getAttribute('data-v') === 'owner';
+        $('#mp-owner').style.display = isOwner ? '' : 'none';
+        $('#mp-member').style.display = isOwner ? 'none' : '';
+      });
+    });
+  })();
+
+  /* ================= Demo 6 新建子用户 ================= */
+  (function () {
+    var root = $('#demo-sub');
+    if (!root) return;
+    var mask = $('#sub-mask'), toast = $('#sub-toast'), list = $('#sub-list');
+    var plugDefs = [
+      { id: 'dsh-at-file', dep: null },
+      { id: 'dsh-context', dep: null },
+      { id: 'modlens', dep: null },
+      { id: 'dsh-vision-router', dep: 'modlens' },
+      { id: 'dsh-usage-stats', dep: null },
+      { id: 'dsh-web-ui', dep: null }
+    ];
+    var users = [
+      { name: 'bob', display: '鲍勃', method: '账号密码', plugs: 3 },
+      { name: 'carol', display: '卡罗尔', method: '邮箱验证码', plugs: 2 }
+    ];
+
+    $('#sub-plugs').innerHTML = plugDefs.map(function (p) {
+      return '<label class="plug-check"><input type="checkbox" value="' + p.id + '" data-dep="' + (p.dep || '') + '">' +
+        '<span>' + p.id + (p.dep ? '<span class="dep">依赖 ' + p.dep + '，勾选时自动带上</span>' : '') + '</span></label>';
+    }).join('');
+
+    function renderList() {
+      list.innerHTML = users.map(function (u) {
+        return '<div class="sub-row"><b>' + u.name + '</b><span style="color:var(--muted)">' + u.display + '</span>' +
+          '<span class="badge gray">' + u.method + '</span><span class="badge indigo">' + u.plugs + ' 个插件</span>' +
+          '<span style="flex:1"></span><span class="badge green">启用中</span></div>';
+      }).join('');
+    }
+
+    $('#sub-plugs').addEventListener('change', function (e) {
+      var input = e.target;
+      if (input.checked && input.getAttribute('data-dep')) {
+        var dep = input.getAttribute('data-dep');
+        $all('#sub-plugs input').forEach(function (i) {
+          if (i.value === dep && !i.checked) {
+            i.checked = true;
+            showToast(toast, '已自动勾选依赖插件：' + dep, 'ok');
+          }
+        });
+      }
+    });
+
+    $('#sub-open').addEventListener('click', function () {
+      mask.classList.add('show');
+      hideToast(toast);
+    });
+    $('#sub-cancel').addEventListener('click', function () { mask.classList.remove('show'); });
+
+    $('#sub-create').addEventListener('click', function () {
+      var name = $('#sub-name').value.trim();
+      var display = $('#sub-display').value.trim() || name;
+      var method = $('#sub-method').value;
+      var contact = $('#sub-contact').value.trim();
+      if (!name) return showToast(toast, '请输入用户名', 'err');
+      if (users.some(function (u) { return u.name === name; })) return showToast(toast, '用户名已存在', 'err');
+      if (method.indexOf('验证码') >= 0 && !contact) return showToast(toast, '验证码方式需要填写邮箱 / 手机号', 'err');
+      var count = $all('#sub-plugs input:checked').length;
+      users.push({ name: name, display: display, method: method.replace(/（.*）/, ''), plugs: count });
+      renderList();
+      mask.classList.remove('show');
+      $('#sub-name').value = ''; $('#sub-display').value = ''; $('#sub-contact').value = '';
+      $all('#sub-plugs input').forEach(function (i) { i.checked = false; });
+    });
+
+    renderList();
+  })();
+
+})();
+</script>
+</body>
+</html>

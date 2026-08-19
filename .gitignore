@@ -1,0 +1,8 @@
+node_modules/
+.pnpm-store/
+.dsh-*/
+*.tsbuildinfo
+.DS_Store
+
+# 废弃的旧网关实现（已被本插件取代，不入库）
+废弃代码/

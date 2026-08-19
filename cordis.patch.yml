@@ -1,0 +1,14 @@
+# dsh-multi-user bundle patch — applied after the web-app layer, before the
+# user's own cordis.patch.yml.
+#
+# Mounts this plugin's Host row. `inject: [webServer]` waits for the webserver
+# service so apply() can register the login-wall route and the /api/mu/* routes.
+#
+# The Client half is mounted automatically via the `dsh.client` field in
+# package.json (scanned by @deepseek-ai/dsh-client-modules into
+# window.__DSH_BOOT__); no row is needed here for the browser side.
+
+- insert:
+    - id: multi-user
+      name: 'dsh-multi-user'
+      inject: [webServer]
