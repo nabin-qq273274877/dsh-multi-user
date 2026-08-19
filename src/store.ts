@@ -4,7 +4,11 @@
  * 数据目录：$DSH_HOME/plugins-data/dsh-multi-user/
  *   settings.json   插件级设置（enabled / ownerUserId / auth）
  *   users.json      用户库（scrypt 加盐口令哈希）
- *   tenants/<uid>/grants.json   用户 → 工作区目录列表映射
+ *   tenants/<uid>/grants.json   用户 → 专属工作区目录（单一目录）
+ *
+ * 权限模型：每个用户（含主管理员）一个专属目录 workspaceRoot，按 userId
+ * 自动生成 `$DSH_HOME/workspaces/<userId>/`，保证不重名。用户只在其专属
+ * 目录内建子目录作为工作区。
  *
  * 不写原生 workspaceRegistry / sessionPersistence，插件移除即还原。
  */
@@ -78,9 +82,12 @@ export interface CreateUserInput {
 
 export class DataStore {
   readonly root: string;
+  /** DSH 主目录（$DSH_HOME），专属目录父根 `$DSH_HOME/workspaces/` 据此计算。 */
+  readonly dshHome: string;
 
-  constructor(root: string) {
+  constructor(root: string, dshHome: string) {
     this.root = root;
+    this.dshHome = dshHome;
     fs.mkdirSync(path.join(root, 'tenants'), { recursive: true });
   }
 
@@ -132,7 +139,8 @@ export class DataStore {
     };
     users.push(account);
     this.saveUsers(users);
-    this.saveGrants(account.id, []);
+    // 每个用户自动分配专属目录（按 userId，保证不重名）
+    this.setWorkspaceRoot(account.id, this.workspaceRootPath(account.id));
     return account;
   }
 
@@ -165,14 +173,76 @@ export class DataStore {
     return true;
   }
 
-  getGrants(userId: string): string[] {
-    const record = readJson<string[] | { workspaceDirs?: string[] }>(this.grantsPath(userId));
-    if (Array.isArray(record)) return record;
-    if (record && Array.isArray(record.workspaceDirs)) return record.workspaceDirs;
-    return [];
+  /* ---------- 专属工作区目录（每用户一个，按 userId 自动生成） ---------- */
+
+  /** 由 userId 生成专属目录绝对路径：$DSH_HOME/workspaces/<userId>（保证不重名）。 */
+  workspaceRootPath(userId: string): string {
+    return path.join(this.dshHome, 'workspaces', userId);
   }
 
-  saveGrants(userId: string, workspaceDirs: string[]): void {
-    writeJsonAtomic(this.grantsPath(userId), { workspaceDirs, updatedAt: new Date().toISOString() });
+  /** 读取某用户的专属目录；无记录时回退到按 userId 生成的默认路径。 */
+  getWorkspaceRoot(userId: string): string {
+    const record = readJson<{ workspaceRoot?: string; workspaceDirs?: string[] }>(this.grantsPath(userId));
+    // 兼容旧数据：workspaceDirs 列表里的第一个作为 root
+    if (record?.workspaceRoot) return record.workspaceRoot;
+    if (record && Array.isArray(record.workspaceDirs) && record.workspaceDirs.length > 0) return record.workspaceDirs[0];
+    return this.workspaceRootPath(userId);
+  }
+
+  /** 写入某用户的专属目录，并确保目录真实存在。 */
+  setWorkspaceRoot(userId: string, workspaceRoot: string): void {
+    writeJsonAtomic(this.grantsPath(userId), { workspaceRoot, updatedAt: new Date().toISOString() });
+    fs.mkdirSync(workspaceRoot, { recursive: true });
+  }
+
+  /** 扫描专属目录下的子目录（作为工作区列表），按名称排序。 */
+  listWorkspaceSubdirs(userId: string): { name: string; path: string }[] {
+    const root = this.getWorkspaceRoot(userId);
+    fs.mkdirSync(root, { recursive: true });
+    let entries: string[];
+    try {
+      entries = fs.readdirSync(root);
+    } catch {
+      return [];
+    }
+    return entries
+      .filter((name) => {
+        try {
+          return fs.statSync(path.join(root, name)).isDirectory();
+        } catch {
+          return false;
+        }
+      })
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => ({ name, path: path.join(root, name) }));
+  }
+
+  /** 在专属目录下新建一个子目录（= 新建工作区），返回其绝对路径。 */
+  createWorkspaceSubdir(userId: string, name: string): { ok: boolean; path?: string; error?: string } {
+    const safe = String(name || '').trim();
+    if (!safe || safe.includes('/') || safe.includes('\\') || safe === '.' || safe === '..') {
+      return { ok: false, error: '工作区名称不能为空或含路径分隔符' };
+    }
+    const root = this.getWorkspaceRoot(userId);
+    fs.mkdirSync(root, { recursive: true });
+    const target = path.join(root, safe);
+    if (fs.existsSync(target)) return { ok: false, error: `工作区「${safe}」已存在` };
+    fs.mkdirSync(target, { recursive: true });
+    return { ok: true, path: target };
+  }
+
+  /** 删除专属目录下的一个子目录（= 删除工作区）。拒绝越出专属目录的路径。 */
+  deleteWorkspaceSubdir(userId: string, name: string): { ok: boolean; error?: string } {
+    const safe = String(name || '').trim();
+    if (!safe || safe.includes('/') || safe.includes('\\') || safe === '.' || safe === '..') {
+      return { ok: false, error: '非法的工作区名称' };
+    }
+    const root = this.getWorkspaceRoot(userId);
+    const target = path.join(root, safe);
+    // 边界防御：目标必须落在专属目录内
+    if (path.dirname(target) !== root) return { ok: false, error: '越出专属目录' };
+    if (!fs.existsSync(target)) return { ok: false, error: `工作区「${safe}」不存在` };
+    fs.rmSync(target, { recursive: true, force: true });
+    return { ok: true };
   }
 }

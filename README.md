@@ -9,8 +9,8 @@
 ## 功能
 
 - **JWT 登录墙**：挂载后访问 `/` 先过登录墙；未设主管理员显示「初始化页」，已设则显示「登录页」；登录成功插件自签 JWT 写 cookie（HttpOnly），跳转回 `/`；
-- **按用户分档工作区**：每个用户只看到自己被授权的工作区目录列表，会话随工作区同源过滤；
-- **用户管理**：主管理员经 setup 初始化，其他用户在管理 API 里添加并授权工作区目录。
+- **每用户专属工作区目录**：每个用户（含主管理员）一个专属目录，按 userId 自动生成（`$DSH_HOME/workspaces/<userId>/`，互不重复）。用户只能看到自己专属目录内的子目录（作为工作区）与会话；
+- **用户管理**：主管理员经 setup 初始化，其他用户在设置页「用户管理」里添加；支持改密码、停用/启用、删除。
 
 > **安全边界**：这是**视图分档 + 轻量登录**，不是强隔离。同一进程内所有用户共享同一份 `workspaceRegistry` / `sessionPersistence`，userId 只是展示过滤器；任何能直接操作宿主机文件系统的人都能看到全部数据。
 
@@ -19,14 +19,16 @@
 ```
 浏览器 ──► dsh web (127.0.0.1:3080)
              │
-             ├─ Host 入口 src/host/index.ts：登录墙（webServer 路由）+ 用户管理 API + JWT 签发
-             ├─ Client 入口 src/client/index.ts：经 /api/mu/me/grants 拿身份 + 接管 sidebar.workspaces 过滤
-             └─ 数据：$DSH_HOME/plugins-data/dsh-multi-user/（settings/users/tenants）
+             ├─ Host 入口 src/host/index.ts：登录墙（webServer 路由）+ 用户管理 API + JWT 签发 + 专属目录
+             ├─ Client 入口 src/client/index.ts：经 /api/mu/me/grants 拿身份 + 扫描专属目录渲染工作区
+             └─ 数据：$DSH_HOME/plugins-data/dsh-multi-user/ + $DSH_HOME/workspaces/<userId>/
 ```
 
-身份链路：**认证调后端**（登录墙 + JWT 签发 + HttpOnly cookie），**分档不重复验签**（client 经 `/api/mu/me/grants` 一次性拿到 userId/role/授权目录列表，浏览器自动携带 HttpOnly cookie，Host 侧验签；client 本地按目录过滤）。
+身份链路：**认证调后端**（登录墙 + JWT 签发 + HttpOnly cookie），**分档不重复验签**（client 经 `/api/mu/me/grants` 一次性拿到 userId/role/专属目录，浏览器自动携带 HttpOnly cookie，Host 侧验签；client 扫描专属目录子目录作为工作区）。
 
-> **设计说明**：JWT 存 **HttpOnly cookie**（JS 读不到 `document.cookie`，避免 XSS 窃取令牌）。因此 client 端**不读 cookie**，而是通过 `fetch('/api/mu/me/grants')` 拿到身份与授权目录——这是唯一一次「拿身份」的调用，与读工作区数据（`useWorkspaces`）同性质，不构成重复验签。
+> **设计说明**：JWT 存 **HttpOnly cookie**（JS 读不到 `document.cookie`，避免 XSS 窃取令牌）。因此 client 端**不读 cookie**，而是通过 `fetch('/api/mu/me/grants')` 拿到身份与专属目录。
+
+> **安全边界**：每个用户的专属目录是「视图分档 + 目录约定」，**不是强隔离**。agent 的工具（bash/文件读写）仍可越过专属目录操作宿主机任意路径；卸载插件后 `sidebar.workspaces` 回到官方全量视图。真正的物理隔离需多进程/每用户独立数据根。
 
 ## 安装
 
@@ -55,9 +57,9 @@ npx @deepseek-ai/dsh plugin --profile web remove dsh-multi-user
 
 ## 首次使用
 
-1. 访问 `http://127.0.0.1:3080/` → 显示「初始化」页，设置主管理员；
-2. 自动跳转登录页 → 用主管理员账号登录 → 进入 DSH；
-3. 主管理员通过 `/api/mu/admin/*` 添加子用户并授权工作区目录。
+1. 访问 `http://127.0.0.1:3080/` → 显示「初始化」页，设置主管理员（自动登录进入 DSH）；
+2. 主管理员在设置页「用户管理」里添加子用户（每个用户自动分配专属目录）；
+3. 每个用户在侧边栏「新建工作区」在自己的专属目录内建子目录作为工作区。
 
 ## HTTP API
 
@@ -67,13 +69,16 @@ npx @deepseek-ai/dsh plugin --profile web remove dsh-multi-user
 | POST | `/api/mu/auth/logout` | 登出（清 cookie） |
 | GET | `/api/mu/auth/me` | 当前身份 |
 | GET | `/api/mu/public/config` | 公开配置（生命周期状态） |
-| POST | `/api/mu/admin/owner` | 初始化主管理员（fresh 态） |
-| GET | `/api/mu/me/grants` | 当前用户身份 + 授权目录列表 |
+| POST | `/api/mu/admin/owner` | 初始化主管理员（fresh 态，成功后自动登录） |
+| GET | `/api/mu/me/grants` | 当前用户身份 + 专属目录 |
+| GET | `/api/mu/me/workspaces` | 列出专属目录下子目录（工作区） |
+| POST | `/api/mu/me/workspaces` | 在专属目录下新建工作区 |
+| POST | `/api/mu/me/workspaces/delete` | 删除工作区 |
+| POST | `/api/mu/me/password` | 修改自己的密码 |
 | GET/POST | `/api/mu/admin/users` | 用户列表 / 新建子用户 |
 | POST | `/api/mu/admin/users/update` | 更新用户（状态/显示名） |
-| POST | `/api/mu/admin/users/grants` | 授权工作区目录 |
-| POST | `/api/mu/admin/users/reset-password` | 重置密码 |
-| POST | `/api/mu/admin/users/delete` | 删除用户（匿名化保留） |
+| POST | `/api/mu/admin/users/reset-password` | 重置子用户密码 |
+| POST | `/api/mu/admin/users/delete` | 删除用户（账号停用，专属目录保留） |
 
 ## 数据存储
 
@@ -82,7 +87,9 @@ $DSH_HOME/plugins-data/dsh-multi-user/
 ├─ .jwt-secret            # JWT HMAC 密钥（0600，自动生成）
 ├─ settings.json          # 插件设置（ownerUserId / auth）
 ├─ users.json             # 用户库（scrypt 加盐口令哈希）
-└─ tenants/<uid>/grants.json  # 用户 → 工作区目录列表映射
+└─ tenants/<uid>/grants.json  # 用户 → 专属工作区目录（单一目录）
+
+$DSH_HOME/workspaces/<userId>/   # 每个用户的专属工作区目录（子目录即工作区）
 ```
 
 不写原生 `workspaceRegistry` / `sessionPersistence`，插件卸载即还原。

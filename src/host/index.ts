@@ -16,7 +16,7 @@
 
 import { createRequire } from 'node:module';
 import * as fs from 'node:fs';
-import { dshHomePath } from '@deepseek-ai/dsh-home-paths';
+import { dshHomePath, resolveDshHome } from '@deepseek-ai/dsh-home-paths';
 import { DataStore, hashPassword, verifyPassword } from '../store.js';
 import { LifecycleManager } from '../lifecycle.js';
 import { loadOrCreateSecret, signJwt, verifyJwt } from '../jwt.js';
@@ -28,6 +28,11 @@ export const inject = ['webServer'];
 
 /** JWT 存 cookie 的键名。 */
 const JWT_COOKIE = 'dsh_mu_jwt';
+
+/** DSH 主目录（$DSH_HOME），专属目录父根 `$DSH_HOME/workspaces/` 据此计算。 */
+function dshHome(): string {
+  return resolveDshHome();
+}
 
 /** 插件数据目录：$DSH_HOME/plugins-data/dsh-multi-user */
 function dataRoot(): string {
@@ -269,14 +274,51 @@ async function handleAdmin(store: DataStore, lifecycle: LifecycleManager, req: I
   const actor = store.getUserById(userId);
   if (!actor) return json(res, 401, { error: 'unauthorized' });
 
-  // 当前用户自己的授权（所有登录用户可用，不是 admin 专属）
+  // ---- 当前用户自己的信息与专属工作区（所有登录用户可用，非 admin 专属） ----
+
+  // 当前用户身份 + 专属目录
   if (key === 'GET /api/mu/me/grants') {
     return json(res, 200, {
       userId,
       username: actor.username,
       role: actor.role,
-      workspaceDirs: store.getGrants(userId),
+      workspaceRoot: store.getWorkspaceRoot(userId),
     });
+  }
+
+  // 列出当前用户专属目录下的子目录（= 工作区）
+  if (key === 'GET /api/mu/me/workspaces') {
+    return json(res, 200, {
+      workspaceRoot: store.getWorkspaceRoot(userId),
+      workspaces: store.listWorkspaceSubdirs(userId),
+    });
+  }
+
+  // 新建工作区（专属目录下建子目录）
+  if (key === 'POST /api/mu/me/workspaces') {
+    const body = await readBody(req);
+    const r = store.createWorkspaceSubdir(userId, String(body.name ?? ''));
+    return json(res, r.ok ? 200 : 400, r);
+  }
+
+  // 删除工作区（专属目录下删子目录）
+  if (key === 'POST /api/mu/me/workspaces/delete') {
+    const body = await readBody(req);
+    const r = store.deleteWorkspaceSubdir(userId, String(body.name ?? ''));
+    return json(res, r.ok ? 200 : 400, r);
+  }
+
+  // 修改自己的密码（含主管理员，问题 3）
+  if (key === 'POST /api/mu/me/password') {
+    const body = await readBody(req);
+    const oldPw = String(body.oldPassword ?? '');
+    const newPw = String(body.newPassword ?? '');
+    if (!actor.bindings.password || !verifyPassword(oldPw, actor.bindings.password)) {
+      return json(res, 400, { ok: false, error: '当前密码错误' });
+    }
+    if (newPw.length < 6) return json(res, 400, { ok: false, error: '新密码至少 6 位' });
+    await store.updateUser(userId, (u) => ({ ...u, bindings: { ...u.bindings, password: hashPassword(newPw) } }));
+    return json(res, 200, { ok: true });
   }
 
   const isOwner = actor.role === 'owner' && !actor.anonymized;
@@ -284,7 +326,10 @@ async function handleAdmin(store: DataStore, lifecycle: LifecycleManager, req: I
 
   // 用户列表
   if (key === 'GET /api/mu/admin/users') {
-    return json(res, 200, store.listUsers().filter((u) => !u.anonymized).map(toPublicView));
+    const list = store.listUsers()
+      .filter((u) => !u.anonymized)
+      .map((u) => ({ ...toPublicView(u), workspaceRoot: store.getWorkspaceRoot(u.id) }));
+    return json(res, 200, list);
   }
 
   // 新建子用户
@@ -301,9 +346,8 @@ async function handleAdmin(store: DataStore, lifecycle: LifecycleManager, req: I
       role: 'member',
       passwordHash: hashPassword(initialPassword),
     });
-    const dirs = Array.isArray(body.workspaceDirs) ? (body.workspaceDirs as unknown[]).filter((d): d is string => typeof d === 'string') : [];
-    store.saveGrants(user.id, dirs);
-    return json(res, 200, { ok: true, user: toPublicView(user) });
+    // createUser 已自动分配专属目录
+    return json(res, 200, { ok: true, user: toPublicView(user), workspaceRoot: store.getWorkspaceRoot(user.id) });
   }
 
   // 更新用户（状态 / 显示名）
@@ -320,18 +364,7 @@ async function handleAdmin(store: DataStore, lifecycle: LifecycleManager, req: I
     return json(res, 200, { ok: true });
   }
 
-  // 授权工作区（用户 → 目录列表）
-  if (key === 'POST /api/mu/admin/users/grants') {
-    const body = await readBody(req);
-    const targetId = String(body.userId ?? '');
-    const target = store.getUserById(targetId);
-    if (!target) return json(res, 404, { ok: false, error: 'user-not-found' });
-    const dirs = Array.isArray(body.workspaceDirs) ? (body.workspaceDirs as unknown[]).filter((d): d is string => typeof d === 'string') : [];
-    store.saveGrants(targetId, dirs);
-    return json(res, 200, { ok: true });
-  }
-
-  // 重置密码
+  // 重置密码（主管理员重置子用户密码）
   if (key === 'POST /api/mu/admin/users/reset-password') {
     const body = await readBody(req);
     const target = store.getUserById(String(body.userId ?? ''));
@@ -359,7 +392,7 @@ async function handleAdmin(store: DataStore, lifecycle: LifecycleManager, req: I
 
 export function apply(ctx: any): void {
   const webServer = ctx.webServer as any;
-  const store = new DataStore(dataRoot());
+  const store = new DataStore(dataRoot(), dshHome());
   const lifecycle = new LifecycleManager(store);
 
   // 1) 登录墙：拦截 `/`（exact）
