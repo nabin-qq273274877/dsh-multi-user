@@ -436,6 +436,9 @@ function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: an
   const [folderDraft, setFolderDraft] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [createError, setCreateError] = React.useState<string | null>(null);
+  // 路径编辑（铅笔图标 → 可编辑输入框）
+  const [pathDraft, setPathDraft] = React.useState<string | null>(null);
+  const pathInputRef = React.useRef<HTMLInputElement>(null);
 
   const load = React.useCallback((path?: string) => {
     setError(null);
@@ -450,6 +453,7 @@ function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: an
     setShowHidden(false);
     setFolderDraft(null);
     setCreateError(null);
+    setPathDraft(null);
     load(initialPath).then((listing: DirectoryListing | null) => { if (listing) { setColumnStack([listing]); setSelectedPath(listing.path); } });
   }, [open, load, initialPath]);
 
@@ -478,6 +482,15 @@ function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: an
       const listing = await load(path);
       if (listing) { setColumnStack([listing]); setSelectedPath(path); }
     }
+  };
+
+  // 路径编辑：提交输入框里的路径
+  const commitPathDraft = async () => {
+    const p = (pathDraft ?? '').trim();
+    setPathDraft(null);
+    if (p === '') return;
+    const listing = await load(p);
+    if (listing) { setColumnStack([listing]); setSelectedPath(listing.path); }
   };
 
   const confirmCreate = async () => {
@@ -519,12 +532,25 @@ function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: an
       // header：标题 + 面包屑
       jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 24px 8px', borderBottom: '1px solid var(--dsw-alias-border-l3)', flex: 'none' }, children: [
         jsx('h2', { style: { margin: 0, minHeight: 28, fontSize: 16, fontWeight: 510, lineHeight: '24px', color: 'var(--dsw-alias-label-primary)' }, children: '选择工作区目录' }),
-        jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 4, minHeight: 24, overflowX: 'auto' }, children: [
-          ...crumbs.map((c, i) => jsxs(React.Fragment, { key: c.path, children: [
-            i > 0 && jsx(IconChevronRightOutline14, { size: 12, style: { color: 'var(--dsw-alias-label-tertiary)', flex: 'none' } }),
-            jsx('button', { type: 'button', onClick: () => navigateTo(c.path), style: { background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, fontWeight: 500, padding: 0, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: c.name }),
-          ] })),
-        ] }),
+        // 面包屑 / 路径编辑（铅笔图标切换）
+        pathDraft === null
+          ? jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 4, minHeight: 24, overflowX: 'auto' }, children: [
+              ...crumbs.map((c, i) => jsxs(React.Fragment, { key: c.path, children: [
+                i > 0 && jsx(IconChevronRightOutline14, { size: 12, style: { color: 'var(--dsw-alias-label-tertiary)', flex: 'none' } }),
+                jsx('button', { type: 'button', onClick: () => navigateTo(c.path), style: { background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, fontWeight: 500, padding: 0, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: c.name }),
+              ] })),
+              jsx('button', { type: 'button', title: '编辑路径', onClick: () => { const cur = currentListing?.path ?? ''; const sep = cur.includes('/') ? '/' : '\\'; setPathDraft(cur.endsWith(sep) ? cur : cur + sep); requestAnimationFrame(() => pathInputRef.current?.focus()); }, style: { display: 'inline-flex', alignItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-tertiary)', padding: 2, marginLeft: 4, flex: 'none' }, children: jsx(IconEditOutline16, { size: 14 }) }),
+            ] })
+          : jsx('input', {
+              ref: pathInputRef,
+              value: pathDraft,
+              autoFocus: true,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => setPathDraft(e.target.value),
+              onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') commitPathDraft(); if (e.key === 'Escape') setPathDraft(null); },
+              onBlur: () => commitPathDraft(),
+              'aria-label': '编辑路径',
+              style: { boxSizing: 'border-box', width: '100%', minWidth: 0, height: 24, padding: '0 8px', border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', fontSize: 13, outline: 'none' },
+            }),
       ] }),
 
       // content：Miller 多列
