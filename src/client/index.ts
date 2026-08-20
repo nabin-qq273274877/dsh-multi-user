@@ -16,7 +16,7 @@
 import * as React from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import type { CSSProperties } from 'react';
-import { IconSearchOutline16, IconPersonalizationOutline16, IconProjectAddOutline16, IconCloseFill14, IconFolderClose16, IconFolderOpen16, IconTriangleRightFill14, IconEllipsisOutline16, IconPlusOutline16, IconEditOutline16, IconTrashOutline16, Button, Menu } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconSearchOutline16, IconPersonalizationOutline16, IconProjectAddOutline16, IconCloseFill14, IconFolderClose16, IconFolderOpen16, IconTriangleRightFill14, IconEllipsisOutline16, IconPlusOutline16, IconEditOutline16, IconTrashOutline16, IconChevronRightOutline14, IconCheckOutline16, Button, Menu, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
 
 export const inject = ['slots', 'workspaces', 'sessions', 'locale'];
 
@@ -307,8 +307,9 @@ function WorkspaceBrowser({ ctx, identity, sessions, addPath, removePath }: { ct
   const [groupBy, setGroupBy] = React.useState<'workspace' | 'flat'>('workspace');
   const [orderBy, setOrderBy] = React.useState<'manual' | 'updated'>('updated');
   const [viewMenuOpen, setViewMenuOpen] = React.useState(false);
-  // pickingFolder = 正在弹原生目录选择器/接纳所选目录
+  // pickingFolder = 正在弹原生目录选择器；addFlowOpen = 打开 browse 目录浏览器（非 native 后端）
   const [pickingFolder, setPickingFolder] = React.useState(false);
+  const [addFlowOpen, setAddFlowOpen] = React.useState(false);
   const [flowError, setFlowError] = React.useState<string | null>(null);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -317,9 +318,10 @@ function WorkspaceBrowser({ ctx, identity, sessions, addPath, removePath }: { ct
   const shown = q ? filtered.filter((w) => (w.title || '').toLowerCase().includes(q) || (w.path || '').toLowerCase().includes(q)) : filtered;
   if (orderBy === 'updated') shown.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
 
-  // 新建工作区：直接调 ctx.workspaces.pickDirectory()（Host 原生目录选择器，
-  // Windows 弹 IFileOpenDialog；取消返回 null）。选定后先把路径记入当前用户的
-  // 工作区清单（视图分档依据），再 createWorkspace 写入全局 registry。
+  // 新建工作区：自适应双后端。
+  // 1) 先试 ctx.workspaces.pickDirectory()（native 能力，Windows/macOS/桌面 Linux 弹原生对话框）；
+  // 2) 若抛「needs the native capability」（容器/Linux 无桌面的 browse 后端），回退到
+  //    应用内目录浏览器（browse 能力的 listDirectory/createDirectory）。
   const openAddFlow = async () => {
     setViewMenuOpen(false);
     setFlowError(null);
@@ -327,13 +329,24 @@ function WorkspaceBrowser({ ctx, identity, sessions, addPath, removePath }: { ct
     try {
       const path = await ctx.workspaces.pickDirectory();
       if (path === null) return; // 用户取消
-      await addPath(path); // 记入该用户清单，刷新视图过滤
-      await ctx.workspaces.create({ path }); // 写入全局 registry
+      await adoptWorkspacePath(path);
     } catch (err) {
-      setFlowError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      // 非 native 后端：pickDirectory 不可用 → 回退到应用内目录浏览器
+      if (msg.includes('native capability') || msg.includes('directory-picker-unavailable')) {
+        setAddFlowOpen(true);
+      } else {
+        setFlowError(msg);
+      }
     } finally {
       setPickingFolder(false);
     }
+  };
+
+  // 接纳一条所选路径：记入当前用户清单 + 写入全局 registry
+  const adoptWorkspacePath = async (path: string) => {
+    await addPath(path); // 记入该用户清单，刷新视图过滤
+    await ctx.workspaces.create({ path }); // 写入全局 registry
   };
 
   const deleteWorkspace = async (w: WorkspaceView) => {
@@ -434,6 +447,18 @@ function WorkspaceBrowser({ ctx, identity, sessions, addPath, removePath }: { ct
     !searchExpanded && jsx('button', { type: 'button', title: '新建工作区', onClick: openAddFlow, disabled: pickingFolder, style: iconBtnStyle, children: jsx(IconProjectAddOutline16, { size: 16 }) }),
     ] }),
 
+    // 应用内目录浏览器（browse 后端回退：容器/Linux 无桌面）
+    jsx(DirectoryPicker, {
+      ctx,
+      open: addFlowOpen,
+      initialPath: identity.workspaceRoot ?? undefined,
+      onPick: async (path: string) => {
+        try { await adoptWorkspacePath(path); } catch (err) { setFlowError(err instanceof Error ? err.message : String(err)); }
+        setAddFlowOpen(false);
+      },
+      onCancel: () => setAddFlowOpen(false),
+    }),
+
     // 接纳失败提示
     flowError && jsx('div', { role: 'alert', style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12, padding: '4px 8px' }, children: `添加工作区失败：${flowError}` }),
 
@@ -452,9 +477,256 @@ function WorkspaceBrowser({ ctx, identity, sessions, addPath, removePath }: { ct
   ] });
 }
 
+/* ---------------- 目录选择器（browse 能力，Miller columns，Modal 弹出） ---------------- */
+
+interface DirectoryEntry {
+  name: string;
+  path: string;
+  hidden?: boolean;
+}
+interface DirectoryListing {
+  path: string;
+  home: string;
+  crumbs: DirectoryEntry[];
+  entries: DirectoryEntry[];
+  truncated: boolean;
+}
+
+/** 目录选择模态框：Miller 多列 + 面包屑 + 新建文件夹 + 打开（对齐原生 browse 选择器）。 */
+function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: any; open: boolean; initialPath?: string; onPick: (path: string) => void; onCancel: () => void }) {
+  // 两列递归导航（对齐原生）：parent = 父目录，selected = 选中的条目，child = 选中目录的内容
+  const [parent, setParent] = React.useState<DirectoryListing | null>(null);
+  const [selected, setSelected] = React.useState<DirectoryEntry | null>(null);
+  const [child, setChild] = React.useState<DirectoryListing | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [showHidden, setShowHidden] = React.useState(false);
+  // 新建文件夹子对话框
+  const [folderDraft, setFolderDraft] = React.useState<string | null>(null);
+  const [creating, setCreating] = React.useState(false);
+  const [createError, setCreateError] = React.useState<string | null>(null);
+  // 路径编辑（铅笔图标 → 可编辑输入框）
+  const [pathDraft, setPathDraft] = React.useState<string | null>(null);
+  const pathInputRef = React.useRef<HTMLInputElement>(null);
+
+  const load = React.useCallback((path?: string) => {
+    setError(null);
+    return ctx.workspaces.listDirectory(path).catch((e: Error) => { setError(e.message || '无法列出目录'); return null; });
+  }, [ctx]);
+
+  // 打开时重置：加载初始目录作为父目录
+  React.useEffect(() => {
+    if (!open) return;
+    setParent(null);
+    setSelected(null);
+    setChild(null);
+    setShowHidden(false);
+    setFolderDraft(null);
+    setCreateError(null);
+    setPathDraft(null);
+    load(initialPath).then((listing: DirectoryListing | null) => { if (listing) setParent(listing); });
+  }, [open, load, initialPath]);
+
+  // 点父列的某个目录 → 选中它，加载其内容到右列
+  const selectEntry = async (entry: DirectoryEntry) => {
+    setSelected(entry);
+    const listing = await load(entry.path);
+    setChild(listing);
+  };
+
+  // 点右列（子目录）里的某个目录 → 右列整体提升为父列，再选中该目录展开其子目录（对齐原生 advance）
+  const advance = async (entry: DirectoryEntry) => {
+    if (child === null) return;
+    setParent(child);   // 右列提升为父列
+    await selectEntry(entry); // 选中 entry，右列展开其子目录
+  };
+
+  // 点面包屑 → 回到该层级
+  const navigateTo = async (path: string) => {
+    // 如果 path 是 parent 的 path，清空选中回到单列
+    if (parent && path === parent.path) {
+      setSelected(null);
+      setChild(null);
+      return;
+    }
+    // 否则直接加载该路径为父目录
+    const listing = await load(path);
+    if (listing) { setParent(listing); setSelected(null); setChild(null); }
+  };
+
+  // 路径编辑：提交输入框里的路径
+  const commitPathDraft = async () => {
+    const p = (pathDraft ?? '').trim();
+    setPathDraft(null);
+    if (p === '') return;
+    const listing = await load(p);
+    if (listing) { setParent(listing); setSelected(null); setChild(null); }
+  };
+
+  const confirmCreate = async () => {
+    const name = (folderDraft ?? '').trim();
+    if (!name) return;
+    // 新建到「当前打开的目标」：优先选中的目录，否则父目录
+    const target = selected?.path ?? parent?.path;
+    if (!target) return;
+    setCreating(true);
+    try {
+      await ctx.workspaces.createDirectory(target, name);
+      setFolderDraft(null);
+      setCreateError(null);
+      const listing = await load(target);
+      if (listing) {
+        // 新建后刷新：如果新建在选中的子目录里，刷新 child；否则刷新 parent
+        if (selected && target === selected.path) setChild(listing);
+        else setParent(listing);
+      }
+    } catch (e) {
+      setCreateError((e as Error).message || '新建文件夹失败');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // 面包屑：显示当前最深层的 crumbs（选中子目录时用 child 的 crumbs，否则 parent 的）
+  const crumbs = (selected && child ? child.crumbs : (parent?.crumbs ?? []));
+  // 路径编辑的当前目录
+  const currentDir = selected?.path ?? parent?.path ?? '';
+  // 「打开」目标：当前选中的目录，否则父目录
+  const targetPath = selected?.path ?? parent?.path ?? null;
+
+  // 单列渲染函数
+  const renderColumn = (listing: DirectoryListing, isChildCol: boolean) => {
+    return jsxs('div', { role: 'list', style: { flex: '1 1 0', minWidth: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }, children: [
+      ...listing.entries.filter((e) => showHidden || !e.hidden).map((e) => {
+        const isSel = selected?.path === e.path;
+        return jsxs('button', {
+          type: 'button',
+          key: e.path,
+          role: 'listitem',
+          onClick: () => isChildCol ? advance(e) : selectEntry(e),
+          style: {
+            display: 'flex', alignItems: 'center', gap: 4, width: '100%', height: 28,
+            background: isSel ? 'var(--dsw-alias-interactive-bg-active, var(--dsw-alias-interactive-bg-hover))' : 'transparent',
+            border: 'none', borderRadius: 6, cursor: 'pointer', padding: 4, textAlign: 'left',
+          },
+          children: [
+            isSel
+              ? jsx(IconFolderOpen16, { size: 16, style: { color: 'var(--dsw-alias-button-info-fill)', flex: 'none' } })
+              : jsx(IconFolderClose16, { size: 16, style: { color: 'var(--dsw-alias-label-secondary)', flex: 'none' } }),
+            jsx('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--dsw-alias-label-primary)', fontSize: 13, fontWeight: 500 }, children: e.name }),
+            jsx(IconChevronRightOutline14, { size: 12, style: { color: 'var(--dsw-alias-label-tertiary)', flex: 'none' } }),
+          ],
+        });
+      }),
+      listing.entries.filter((e) => showHidden || !e.hidden).length === 0 && jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12, padding: '8px 4px' }, children: '（空目录）' }),
+    ] });
+  };
+
+  return jsxs(Modal, {
+    open,
+    onClose: onCancel,
+    title: '选择工作区目录',
+    closeLabel: '取消',
+    className: 'dsh-mu-dirpicker',
+    headless: true,
+    children: [
+      jsxs('div', { style: { display: 'flex', flexDirection: 'column', height: 'min(500px, 100dvh - 32px)' }, children: [
+      // header：标题 + 面包屑
+      jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 24px 8px', borderBottom: '1px solid var(--dsw-alias-border-l3)', flex: 'none' }, children: [
+        jsx('h2', { style: { margin: 0, minHeight: 28, fontSize: 16, fontWeight: 510, lineHeight: '24px', color: 'var(--dsw-alias-label-primary)' }, children: '选择工作区目录' }),
+        // 面包屑 / 路径编辑（铅笔图标切换）
+        pathDraft === null
+          ? jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 4, minHeight: 24, overflowX: 'auto' }, children: [
+              ...crumbs.map((c, i) => jsxs(React.Fragment, { key: c.path, children: [
+                i > 0 && jsx(IconChevronRightOutline14, { size: 12, style: { color: 'var(--dsw-alias-label-tertiary)', flex: 'none' } }),
+                jsx('button', { type: 'button', onClick: () => navigateTo(c.path), style: { background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, fontWeight: 500, padding: 0, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: c.name }),
+              ] })),
+              jsx('button', { type: 'button', title: '编辑路径', onClick: () => { const sep = currentDir.includes('/') ? '/' : '\\'; setPathDraft(currentDir.endsWith(sep) ? currentDir : currentDir + sep); requestAnimationFrame(() => pathInputRef.current?.focus()); }, style: { display: 'inline-flex', alignItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-tertiary)', padding: 2, marginLeft: 4, flex: 'none' }, children: jsx(IconEditOutline16, { size: 14 }) }),
+            ] })
+          : jsx('input', {
+              ref: pathInputRef,
+              value: pathDraft,
+              autoFocus: true,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => setPathDraft(e.target.value),
+              onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') commitPathDraft(); if (e.key === 'Escape') setPathDraft(null); },
+              onBlur: () => commitPathDraft(),
+              'aria-label': '编辑路径',
+              style: { boxSizing: 'border-box', width: '100%', minWidth: 0, height: 24, padding: '0 8px', border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', fontSize: 13, outline: 'none' },
+            }),
+      ] }),
+
+      // content：两列（父列 + 选中的子列）
+      jsxs('div', { style: { display: 'flex', flex: 1, gap: 12, padding: '16px 24px', minHeight: 0, overflow: 'hidden' }, children: [
+        parent === null
+          ? jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '24px 0' }, children: '加载目录…' })
+          : renderColumn(parent, false),
+        selected !== null && jsx('span', { style: { width: 1, flex: 'none', background: 'var(--dsw-alias-border-l3)' } }),
+        selected !== null && (child === null
+          ? jsx('div', { style: { flex: '1 1 0', color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '24px 0' }, children: '加载目录…' })
+          : renderColumn(child, true)),
+      ] }),
+
+      error && jsx('div', { role: 'alert', style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12, padding: '4px 24px' }, children: error }),
+
+      // footer：新建文件夹 + 显示隐藏 + 取消 + 打开
+      jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '16px 24px', borderTop: '1px solid var(--dsw-alias-border-l3)', flex: 'none' }, children: [
+        jsx(Button, { variant: 'outline', size: 'sm', icon: jsx(IconPlusOutline16, { size: 14 }), disabled: parent === null, onClick: () => { setFolderDraft(''); setCreateError(null); }, children: '新建文件夹' }),
+        jsxs('button', { type: 'button', 'aria-pressed': showHidden, onClick: () => setShowHidden((v) => !v), style: { display: 'inline-flex', alignItems: 'center', gap: 4, background: 'transparent', border: 'none', cursor: 'pointer', color: showHidden ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)', fontSize: 13, fontWeight: 500, padding: 0, whiteSpace: 'nowrap' }, children: [
+          '显示隐藏文件',
+          showHidden && jsx(IconCheckOutline16, { size: 14 }),
+        ] }),
+        jsx('span', { style: { flex: 1 } }),
+        jsx(Button, { variant: 'outline', size: 'sm', onClick: onCancel, children: '取消' }),
+        jsx(Button, { variant: 'primary', size: 'sm', disabled: targetPath === null, onClick: () => { if (targetPath) onPick(targetPath); }, children: '打开' }),
+      ] }),
+      ] }),
+      // 新建文件夹子对话框
+      jsx(Modal, {
+      open: folderDraft !== null,
+      onClose: () => { if (!creating) setFolderDraft(null); },
+      title: '新建文件夹',
+      closeLabel: '取消',
+      headless: true,
+      children: jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: 12, padding: '22px 24px 20px' }, children: [
+        jsx('h3', { style: { margin: 0, fontSize: 16, fontWeight: 510, color: 'var(--dsw-alias-label-primary)' }, children: '新建文件夹' }),
+        jsx('p', { style: { margin: 0, fontSize: 14, color: 'var(--dsw-alias-label-primary)' }, children: `在「${targetPath ?? ''}」中新建文件夹` }),
+        jsx('input', {
+          value: folderDraft ?? '',
+          autoFocus: true,
+          disabled: creating,
+          onChange: (e: React.ChangeEvent<HTMLInputElement>) => setFolderDraft(e.target.value),
+          onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') confirmCreate(); if (e.key === 'Escape') { if (!creating) setFolderDraft(null); } },
+          placeholder: '未命名文件夹',
+          style: { boxSizing: 'border-box', width: '100%', height: 44, padding: '7px 14px', borderRadius: 22, border: '1px solid var(--dsw-alias-border-l2)', background: 'transparent', color: 'var(--dsw-alias-label-primary)', fontSize: 14, outline: 'none' },
+        }),
+        createError && jsx('div', { style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12 }, children: createError }),
+        jsxs('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }, children: [
+          jsx(Button, { variant: 'outline', size: 'sm', onClick: () => { if (!creating) setFolderDraft(null); }, children: '取消' }),
+          jsx(Button, { variant: 'primary', size: 'sm', disabled: creating || !(folderDraft ?? '').trim(), onClick: confirmCreate, children: '创建' }),
+        ] }),
+      ] }),
+      }),
+    ],
+  });
+}
+
 /* ---------------- 插件 body ---------------- */
 
+// 目录选择器弹窗宽度样式（Modal 的 className 是 CSS 类名，注入样式对齐原生 680px 宽）
+const DIRPICKER_CSS = `.dsh-mu-dirpicker.dsh-mu-dirpicker{width:min(680px,100%);max-width:calc(100vw - 32px);padding:0;gap:0}`;
+
+function injectDirPickerCss(): void {
+  if (typeof document === 'undefined') return;
+  const tagId = 'dsh-multi-user/dir-picker.css';
+  if (document.querySelector(`style[data-plugin-css="${tagId}"]`)) return;
+  const style = document.createElement('style');
+  style.dataset.plugin = 'dsh-multi-user';
+  style.dataset.pluginCss = tagId;
+  style.textContent = DIRPICKER_CSS;
+  document.head.appendChild(style);
+}
+
 export function apply(ctx: any): void {
+  injectDirPickerCss();
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
     name: 'sidebar.workspaces',
     priority: -1, // 低于官方 ui-workspace 的默认 0，shadow 原生浏览区（lowest renders）
