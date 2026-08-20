@@ -16,7 +16,7 @@
 import * as React from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import type { CSSProperties } from 'react';
-import { IconSearchOutline16, IconPersonalizationOutline16, IconProjectAddOutline16, IconCloseFill14, IconFolderClose16, IconFolderOpen16, IconTriangleRightFill14, IconEllipsisOutline16, IconPlusOutline16, IconEditOutline16, IconTrashOutline16, IconChevronRightOutline14, IconCheckOutline16, Button, Menu, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
+import { IconSearchOutline16, IconPersonalizationOutline16, IconProjectAddOutline16, IconCloseFill14, IconFolderClose16, IconFolderOpen16, IconTriangleRightFill14, IconEllipsisOutline16, IconPlusOutline16, IconEditOutline16, IconTrashOutline16, Button, Menu } from '@deepseek-ai/dsh-client-ui-primitives';
 
 export const inject = ['slots', 'workspaces', 'sessions', 'locale'];
 
@@ -266,14 +266,17 @@ function WorkspaceItem({ workspace, sessions, onOpen, onDelete, onRename, onStar
   ] });
 }
 
-function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Identity; sessions: SessionSummary[] }) {
+function WorkspaceBrowser({ ctx, identity, sessions, renderSlot }: { ctx: any; identity: Identity; sessions: SessionSummary[]; renderSlot: (key: string, owner: any) => any }) {
   const workspaceSnap = useWorkspaceSnapshot(ctx);
   const [query, setQuery] = React.useState('');
   const [searchExpanded, setSearchExpanded] = React.useState(false);
   const [groupBy, setGroupBy] = React.useState<'workspace' | 'flat'>('workspace');
   const [orderBy, setOrderBy] = React.useState<'manual' | 'updated'>('updated');
   const [viewMenuOpen, setViewMenuOpen] = React.useState(false);
-  const [addFlowOpen, setAddFlowOpen] = React.useState(false);
+  // directory-flow 状态：open = 已请求选择，pickingFolder = 正在接纳所选目录
+  const [flowOpen, setFlowOpen] = React.useState(false);
+  const [pickingFolder, setPickingFolder] = React.useState(false);
+  const [flowError, setFlowError] = React.useState<string | null>(null);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const addBtnRef = React.useRef<HTMLButtonElement>(null);
 
@@ -282,9 +285,24 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
   const shown = q ? filtered.filter((w) => (w.title || '').toLowerCase().includes(q) || (w.path || '').toLowerCase().includes(q)) : filtered;
   if (orderBy === 'updated') shown.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
 
-  // 新建工作区：打开 browse 目录选择器（renderSlot directoryFlow），选完 createWorkspace
-  const openAddFlow = () => { setViewMenuOpen(false); setAddFlowOpen(true); };
-  const closeAddFlow = () => setAddFlowOpen(false);
+  // 新建工作区：打开官方 directory-flow（Windows 弹原生对话框 / Linux 应用内浏览），选完 createWorkspace 接纳
+  const openAddFlow = () => { setViewMenuOpen(false); setFlowError(null); setFlowOpen(true); };
+  const closeAddFlow = () => { setFlowOpen(false); setPickingFolder(false); };
+
+  // directory-flow owner 契约：onPicked 接纳所选目录为工作区
+  const flowOwner = {
+    open: flowOpen,
+    busy: pickingFolder,
+    onPicked: (path: string) => {
+      setPickingFolder(true);
+      ctx.workspaces.create({ path })
+        .then(() => { closeAddFlow(); })
+        .catch((err: unknown) => { setFlowError(err instanceof Error ? err.message : String(err)); closeAddFlow(); })
+        .finally(() => setPickingFolder(false));
+    },
+    onCancel: closeAddFlow,
+    onError: (message: string) => { setFlowError(message); closeAddFlow(); },
+  };
 
   const deleteWorkspace = async (w: WorkspaceView) => {
     if (!confirm(`删除工作区「${w.title || w.path}」？仅移除工作区记录，目录与会话数据保留。`)) return;
@@ -313,7 +331,7 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
 
       // 搜索：同一容器，放大镜始终在左，输入框 width 0→100% 过渡（照抄原生）
       jsxs('div', {
-        onClick: () => { setAddFlowOpen(false); setSearchExpanded(true); requestAnimationFrame(() => searchInputRef.current?.focus()); },
+        onClick: () => { closeAddFlow(); setSearchExpanded(true); requestAnimationFrame(() => searchInputRef.current?.focus()); },
         style: {
           flex: searchExpanded ? 1 : 'none',
           minWidth: 0,
@@ -330,7 +348,7 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
           jsx('button', {
             type: 'button',
             title: '搜索会话',
-            onClick: (e: React.MouseEvent) => { e.stopPropagation(); setAddFlowOpen(false); setSearchExpanded(true); requestAnimationFrame(() => searchInputRef.current?.focus()); },
+            onClick: (e: React.MouseEvent) => { e.stopPropagation(); closeAddFlow(); setSearchExpanded(true); requestAnimationFrame(() => searchInputRef.current?.focus()); },
             style: iconBtnStyle,
             children: jsx(IconSearchOutline16, { size: searchExpanded ? 11 : 14 }),
           }),
@@ -379,21 +397,15 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
         anchor: jsx('button', { type: 'button', title: '视图', onClick: () => setViewMenuOpen((v) => !v), style: iconBtnStyle, children: jsx(IconPersonalizationOutline16, {}) }),
       }),
 
-      // 添加：打开目录选择器（browse；搜索展开时隐藏）
+      // 添加：打开目录选择器（官方 directory-flow；搜索展开时隐藏）
       !searchExpanded && jsx('button', { ref: addBtnRef, type: 'button', title: '新建工作区', onClick: openAddFlow, style: iconBtnStyle, children: jsx(IconProjectAddOutline16, { size: 16 }) }),
     ] }),
 
-    // 目录选择器（browse 能力，Modal 弹出）
-    jsx(DirectoryPicker, {
-      ctx,
-      open: addFlowOpen,
-      initialPath: identity.workspaceRoot ?? undefined,
-      onPick: async (path: string) => {
-        try { await ctx.workspaces.create({ path }); } catch (err) { alert(`添加工作区失败：${err instanceof Error ? err.message : String(err)}`); }
-        closeAddFlow();
-      },
-      onCancel: closeAddFlow,
-    }),
+    // 官方目录选择 flow（Windows 弹原生对话框 / Linux 应用内浏览），由宿主组合的 native/browse 后端填入
+    renderSlot('sidebar.workspaces.directoryFlow', flowOwner),
+
+    // 接纳失败提示
+    flowError && jsx('div', { role: 'alert', style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12, padding: '4px 8px' }, children: `添加工作区失败：${flowError}` }),
 
     jsx('div', { style: { flex: 1, overflowY: 'auto', minHeight: 0 }, children: [
       shown.map((w) => jsx(WorkspaceItem, {
@@ -410,267 +422,24 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
   ] });
 }
 
-/* ---------------- 目录选择器（browse 能力，Miller columns，Modal 弹出） ---------------- */
-
-interface DirectoryEntry {
-  name: string;
-  path: string;
-  hidden?: boolean;
-}
-interface DirectoryListing {
-  path: string;
-  home: string;
-  crumbs: DirectoryEntry[];
-  entries: DirectoryEntry[];
-  truncated: boolean;
-}
-
-/** 目录选择模态框：Miller 多列 + 面包屑 + 新建文件夹 + 打开（对齐原生 browse 选择器）。 */
-function DirectoryPicker({ ctx, open, initialPath, onPick, onCancel }: { ctx: any; open: boolean; initialPath?: string; onPick: (path: string) => void; onCancel: () => void }) {
-  // 两列递归导航（对齐原生）：parent = 父目录，selected = 选中的条目，child = 选中目录的内容
-  const [parent, setParent] = React.useState<DirectoryListing | null>(null);
-  const [selected, setSelected] = React.useState<DirectoryEntry | null>(null);
-  const [child, setChild] = React.useState<DirectoryListing | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-  const [showHidden, setShowHidden] = React.useState(false);
-  // 新建文件夹子对话框
-  const [folderDraft, setFolderDraft] = React.useState<string | null>(null);
-  const [creating, setCreating] = React.useState(false);
-  const [createError, setCreateError] = React.useState<string | null>(null);
-  // 路径编辑（铅笔图标 → 可编辑输入框）
-  const [pathDraft, setPathDraft] = React.useState<string | null>(null);
-  const pathInputRef = React.useRef<HTMLInputElement>(null);
-
-  const load = React.useCallback((path?: string) => {
-    setError(null);
-    return ctx.workspaces.listDirectory(path).catch((e: Error) => { setError(e.message || '无法列出目录'); return null; });
-  }, [ctx]);
-
-  // 打开时重置：加载初始目录作为父目录
-  React.useEffect(() => {
-    if (!open) return;
-    setParent(null);
-    setSelected(null);
-    setChild(null);
-    setShowHidden(false);
-    setFolderDraft(null);
-    setCreateError(null);
-    setPathDraft(null);
-    load(initialPath).then((listing: DirectoryListing | null) => { if (listing) setParent(listing); });
-  }, [open, load, initialPath]);
-
-  // 点父列的某个目录 → 选中它，加载其内容到右列
-  const selectEntry = async (entry: DirectoryEntry) => {
-    setSelected(entry);
-    const listing = await load(entry.path);
-    setChild(listing);
-  };
-
-  // 点右列（子目录）里的某个目录 → 右列整体提升为父列，再选中该目录展开其子目录（对齐原生 advance）
-  const advance = async (entry: DirectoryEntry) => {
-    if (child === null) return;
-    setParent(child);   // 右列提升为父列
-    await selectEntry(entry); // 选中 entry，右列展开其子目录
-  };
-
-  // 点面包屑 → 回到该层级
-  const navigateTo = async (path: string) => {
-    // 如果 path 是 parent 的 path，清空选中回到单列
-    if (parent && path === parent.path) {
-      setSelected(null);
-      setChild(null);
-      return;
-    }
-    // 否则直接加载该路径为父目录
-    const listing = await load(path);
-    if (listing) { setParent(listing); setSelected(null); setChild(null); }
-  };
-
-  // 路径编辑：提交输入框里的路径
-  const commitPathDraft = async () => {
-    const p = (pathDraft ?? '').trim();
-    setPathDraft(null);
-    if (p === '') return;
-    const listing = await load(p);
-    if (listing) { setParent(listing); setSelected(null); setChild(null); }
-  };
-
-  const confirmCreate = async () => {
-    const name = (folderDraft ?? '').trim();
-    if (!name) return;
-    // 新建到「当前打开的目标」：优先选中的目录，否则父目录
-    const target = selected?.path ?? parent?.path;
-    if (!target) return;
-    setCreating(true);
-    try {
-      await ctx.workspaces.createDirectory(target, name);
-      setFolderDraft(null);
-      setCreateError(null);
-      const listing = await load(target);
-      if (listing) {
-        // 新建后刷新：如果新建在选中的子目录里，刷新 child；否则刷新 parent
-        if (selected && target === selected.path) setChild(listing);
-        else setParent(listing);
-      }
-    } catch (e) {
-      setCreateError((e as Error).message || '新建文件夹失败');
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  // 面包屑：显示当前最深层的 crumbs（选中子目录时用 child 的 crumbs，否则 parent 的）
-  const crumbs = (selected && child ? child.crumbs : (parent?.crumbs ?? []));
-  // 路径编辑的当前目录
-  const currentDir = selected?.path ?? parent?.path ?? '';
-  // 「打开」目标：当前选中的目录，否则父目录
-  const targetPath = selected?.path ?? parent?.path ?? null;
-
-  // 单列渲染函数
-  const renderColumn = (listing: DirectoryListing, isChildCol: boolean) => {
-    return jsxs('div', { role: 'list', style: { flex: '1 1 0', minWidth: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }, children: [
-      ...listing.entries.filter((e) => showHidden || !e.hidden).map((e) => {
-        const isSel = selected?.path === e.path;
-        return jsxs('button', {
-          type: 'button',
-          key: e.path,
-          role: 'listitem',
-          onClick: () => isChildCol ? advance(e) : selectEntry(e),
-          style: {
-            display: 'flex', alignItems: 'center', gap: 4, width: '100%', height: 28,
-            background: isSel ? 'var(--dsw-alias-interactive-bg-active, var(--dsw-alias-interactive-bg-hover))' : 'transparent',
-            border: 'none', borderRadius: 6, cursor: 'pointer', padding: 4, textAlign: 'left',
-          },
-          children: [
-            isSel
-              ? jsx(IconFolderOpen16, { size: 16, style: { color: 'var(--dsw-alias-button-info-fill)', flex: 'none' } })
-              : jsx(IconFolderClose16, { size: 16, style: { color: 'var(--dsw-alias-label-secondary)', flex: 'none' } }),
-            jsx('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--dsw-alias-label-primary)', fontSize: 13, fontWeight: 500 }, children: e.name }),
-            jsx(IconChevronRightOutline14, { size: 12, style: { color: 'var(--dsw-alias-label-tertiary)', flex: 'none' } }),
-          ],
-        });
-      }),
-      listing.entries.filter((e) => showHidden || !e.hidden).length === 0 && jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 12, padding: '8px 4px' }, children: '（空目录）' }),
-    ] });
-  };
-
-  return jsxs(Modal, {
-    open,
-    onClose: onCancel,
-    title: '选择工作区目录',
-    closeLabel: '取消',
-    className: 'dsh-mu-dirpicker',
-    headless: true,
-    children: [
-      jsxs('div', { style: { display: 'flex', flexDirection: 'column', height: 'min(500px, 100dvh - 32px)' }, children: [
-      // header：标题 + 面包屑
-      jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, padding: '16px 24px 8px', borderBottom: '1px solid var(--dsw-alias-border-l3)', flex: 'none' }, children: [
-        jsx('h2', { style: { margin: 0, minHeight: 28, fontSize: 16, fontWeight: 510, lineHeight: '24px', color: 'var(--dsw-alias-label-primary)' }, children: '选择工作区目录' }),
-        // 面包屑 / 路径编辑（铅笔图标切换）
-        pathDraft === null
-          ? jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 4, minHeight: 24, overflowX: 'auto' }, children: [
-              ...crumbs.map((c, i) => jsxs(React.Fragment, { key: c.path, children: [
-                i > 0 && jsx(IconChevronRightOutline14, { size: 12, style: { color: 'var(--dsw-alias-label-tertiary)', flex: 'none' } }),
-                jsx('button', { type: 'button', onClick: () => navigateTo(c.path), style: { background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, fontWeight: 500, padding: 0, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, children: c.name }),
-              ] })),
-              jsx('button', { type: 'button', title: '编辑路径', onClick: () => { const sep = currentDir.includes('/') ? '/' : '\\'; setPathDraft(currentDir.endsWith(sep) ? currentDir : currentDir + sep); requestAnimationFrame(() => pathInputRef.current?.focus()); }, style: { display: 'inline-flex', alignItems: 'center', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dsw-alias-label-tertiary)', padding: 2, marginLeft: 4, flex: 'none' }, children: jsx(IconEditOutline16, { size: 14 }) }),
-            ] })
-          : jsx('input', {
-              ref: pathInputRef,
-              value: pathDraft,
-              autoFocus: true,
-              onChange: (e: React.ChangeEvent<HTMLInputElement>) => setPathDraft(e.target.value),
-              onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') commitPathDraft(); if (e.key === 'Escape') setPathDraft(null); },
-              onBlur: () => commitPathDraft(),
-              'aria-label': '编辑路径',
-              style: { boxSizing: 'border-box', width: '100%', minWidth: 0, height: 24, padding: '0 8px', border: '1px solid var(--dsw-alias-border-l2)', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)', fontSize: 13, outline: 'none' },
-            }),
-      ] }),
-
-      // content：两列（父列 + 选中的子列）
-      jsxs('div', { style: { display: 'flex', flex: 1, gap: 12, padding: '16px 24px', minHeight: 0, overflow: 'hidden' }, children: [
-        parent === null
-          ? jsx('div', { style: { color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '24px 0' }, children: '加载目录…' })
-          : renderColumn(parent, false),
-        selected !== null && jsx('span', { style: { width: 1, flex: 'none', background: 'var(--dsw-alias-border-l3)' } }),
-        selected !== null && (child === null
-          ? jsx('div', { style: { flex: '1 1 0', color: 'var(--dsw-alias-label-tertiary)', fontSize: 13, padding: '24px 0' }, children: '加载目录…' })
-          : renderColumn(child, true)),
-      ] }),
-
-      error && jsx('div', { role: 'alert', style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12, padding: '4px 24px' }, children: error }),
-
-      // footer：新建文件夹 + 显示隐藏 + 取消 + 打开
-      jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '16px 24px', borderTop: '1px solid var(--dsw-alias-border-l3)', flex: 'none' }, children: [
-        jsx(Button, { variant: 'outline', size: 'sm', icon: jsx(IconPlusOutline16, { size: 14 }), disabled: parent === null, onClick: () => { setFolderDraft(''); setCreateError(null); }, children: '新建文件夹' }),
-        jsxs('button', { type: 'button', 'aria-pressed': showHidden, onClick: () => setShowHidden((v) => !v), style: { display: 'inline-flex', alignItems: 'center', gap: 4, background: 'transparent', border: 'none', cursor: 'pointer', color: showHidden ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)', fontSize: 13, fontWeight: 500, padding: 0, whiteSpace: 'nowrap' }, children: [
-          '显示隐藏文件',
-          showHidden && jsx(IconCheckOutline16, { size: 14 }),
-        ] }),
-        jsx('span', { style: { flex: 1 } }),
-        jsx(Button, { variant: 'outline', size: 'sm', onClick: onCancel, children: '取消' }),
-        jsx(Button, { variant: 'primary', size: 'sm', disabled: targetPath === null, onClick: () => { if (targetPath) onPick(targetPath); }, children: '打开' }),
-      ] }),
-      ] }),
-      // 新建文件夹子对话框
-      jsx(Modal, {
-      open: folderDraft !== null,
-      onClose: () => { if (!creating) setFolderDraft(null); },
-      title: '新建文件夹',
-      closeLabel: '取消',
-      headless: true,
-      children: jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: 12, padding: '22px 24px 20px' }, children: [
-        jsx('h3', { style: { margin: 0, fontSize: 16, fontWeight: 510, color: 'var(--dsw-alias-label-primary)' }, children: '新建文件夹' }),
-        jsx('p', { style: { margin: 0, fontSize: 14, color: 'var(--dsw-alias-label-primary)' }, children: `在「${targetPath ?? ''}」中新建文件夹` }),
-        jsx('input', {
-          value: folderDraft ?? '',
-          autoFocus: true,
-          disabled: creating,
-          onChange: (e: React.ChangeEvent<HTMLInputElement>) => setFolderDraft(e.target.value),
-          onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') confirmCreate(); if (e.key === 'Escape') { if (!creating) setFolderDraft(null); } },
-          placeholder: '未命名文件夹',
-          style: { boxSizing: 'border-box', width: '100%', height: 44, padding: '7px 14px', borderRadius: 22, border: '1px solid var(--dsw-alias-border-l2)', background: 'transparent', color: 'var(--dsw-alias-label-primary)', fontSize: 14, outline: 'none' },
-        }),
-        createError && jsx('div', { style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12 }, children: createError }),
-        jsxs('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }, children: [
-          jsx(Button, { variant: 'outline', size: 'sm', onClick: () => { if (!creating) setFolderDraft(null); }, children: '取消' }),
-          jsx(Button, { variant: 'primary', size: 'sm', disabled: creating || !(folderDraft ?? '').trim(), onClick: confirmCreate, children: '创建' }),
-        ] }),
-      ] }),
-      }),
-    ],
-  });
-}
-
 /* ---------------- 插件 body ---------------- */
 
-// 目录选择器弹窗宽度样式（Modal 的 className 是 CSS 类名，注入样式对齐原生 680px 宽）
-const DIRPICKER_CSS = `.dsh-mu-dirpicker.dsh-mu-dirpicker{width:min(680px,100%);max-width:calc(100vw - 32px);padding:0;gap:0}`;
-
-function injectDirPickerCss(): void {
-  if (typeof document === 'undefined') return;
-  const tagId = 'dsh-multi-user/dir-picker.css';
-  if (document.querySelector(`style[data-plugin-css="${tagId}"]`)) return;
-  const style = document.createElement('style');
-  style.dataset.plugin = 'dsh-multi-user';
-  style.dataset.pluginCss = tagId;
-  style.textContent = DIRPICKER_CSS;
-  document.head.appendChild(style);
-}
-
 export function apply(ctx: any): void {
-  injectDirPickerCss();
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
     name: 'sidebar.workspaces',
     priority: -1, // 低于官方 ui-workspace 的默认 0，shadow 原生浏览区（lowest renders）
+    // 声明官方目录选择 flow 子 slot：由宿主组合的 native/browse 后端填入
+    // （Windows 弹原生 IFileOpenDialog / Linux 弹应用内浏览对话框），与原生一致。
+    children: { 'sidebar.workspaces.directoryFlow': { kind: 'single', scope: 'root' } },
     inject: () => ({}),
-  }, function FilteredBrowser() {
+  }, function FilteredBrowser(props: any) {
     const identity = useIdentity();
     const sessions = useSessionSnapshot(ctx);
     return jsx(WorkspaceBrowser, {
       ctx,
       identity,
       sessions,
+      renderSlot: props.renderSlot,
     });
   }));
 
