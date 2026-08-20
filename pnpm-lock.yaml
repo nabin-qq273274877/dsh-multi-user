@@ -12,14 +12,14 @@ importers:
         specifier: ^4.0.1
         version: 4.0.1
       '@deepseek-ai/dsh-home-paths':
-        specifier: ^0.1.0-rc.6
+        specifier: ^0.1.0-rc.7
         version: 0.1.0-rc.7(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.7(@deepseek-ai/cordis@4.0.1))
       react:
         specifier: ^18.2.0
         version: 18.2.0
     devDependencies:
       '@deepseek-ai/dsh-client-ui-primitives':
-        specifier: ^0.1.0-rc.6
+        specifier: ^0.1.0-rc.7
         version: 0.1.0-rc.7(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.7(@deepseek-ai/cordis@4.0.1))
       '@types/node':
         specifier: ^22.20.0
