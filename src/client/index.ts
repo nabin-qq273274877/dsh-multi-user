@@ -266,42 +266,41 @@ function WorkspaceItem({ workspace, sessions, onOpen, onDelete, onRename, onStar
   ] });
 }
 
-function WorkspaceBrowser({ ctx, identity, sessions, renderSlot }: { ctx: any; identity: Identity; sessions: SessionSummary[]; renderSlot: (key: string, owner: any) => any }) {
+function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Identity; sessions: SessionSummary[] }) {
   const workspaceSnap = useWorkspaceSnapshot(ctx);
   const [query, setQuery] = React.useState('');
   const [searchExpanded, setSearchExpanded] = React.useState(false);
   const [groupBy, setGroupBy] = React.useState<'workspace' | 'flat'>('workspace');
   const [orderBy, setOrderBy] = React.useState<'manual' | 'updated'>('updated');
   const [viewMenuOpen, setViewMenuOpen] = React.useState(false);
-  // directory-flow 状态：open = 已请求选择，pickingFolder = 正在接纳所选目录
-  const [flowOpen, setFlowOpen] = React.useState(false);
+  // pickingFolder = 正在弹原生目录选择器/接纳所选目录
   const [pickingFolder, setPickingFolder] = React.useState(false);
   const [flowError, setFlowError] = React.useState<string | null>(null);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
-  const addBtnRef = React.useRef<HTMLButtonElement>(null);
 
   const filtered = filterWorkspaces(workspaceSnap.items || [], identity);
   const q = query.trim().toLowerCase();
   const shown = q ? filtered.filter((w) => (w.title || '').toLowerCase().includes(q) || (w.path || '').toLowerCase().includes(q)) : filtered;
   if (orderBy === 'updated') shown.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
 
-  // 新建工作区：打开官方 directory-flow（Windows 弹原生对话框 / Linux 应用内浏览），选完 createWorkspace 接纳
-  const openAddFlow = () => { setViewMenuOpen(false); setFlowError(null); setFlowOpen(true); };
-  const closeAddFlow = () => { setFlowOpen(false); setPickingFolder(false); };
-
-  // directory-flow owner 契约：onPicked 接纳所选目录为工作区
-  const flowOwner = {
-    open: flowOpen,
-    busy: pickingFolder,
-    onPicked: (path: string) => {
-      setPickingFolder(true);
-      ctx.workspaces.create({ path })
-        .then(() => { closeAddFlow(); })
-        .catch((err: unknown) => { setFlowError(err instanceof Error ? err.message : String(err)); closeAddFlow(); })
-        .finally(() => setPickingFolder(false));
-    },
-    onCancel: closeAddFlow,
-    onError: (message: string) => { setFlowError(message); closeAddFlow(); },
+  // 新建工作区：直接调 ctx.workspaces.pickDirectory()（Host 原生目录选择器，
+  // Windows 弹 IFileOpenDialog；取消返回 null），选定后 createWorkspace 接纳。
+  // 不再经 sidebar.workspaces.directoryFlow 子 slot 渲染：该子 slot 由官方
+  // ui-workspace entry 声明（children 表全局唯一，插件重复声明会让官方包加载
+  // 报错），而 renderSlot 授权要求 key 在本 entry 自己的 children 表里。
+  const openAddFlow = async () => {
+    setViewMenuOpen(false);
+    setFlowError(null);
+    setPickingFolder(true);
+    try {
+      const path = await ctx.workspaces.pickDirectory();
+      if (path === null) return; // 用户取消
+      await ctx.workspaces.create({ path });
+    } catch (err) {
+      setFlowError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPickingFolder(false);
+    }
   };
 
   const deleteWorkspace = async (w: WorkspaceView) => {
@@ -331,7 +330,7 @@ function WorkspaceBrowser({ ctx, identity, sessions, renderSlot }: { ctx: any; i
 
       // 搜索：同一容器，放大镜始终在左，输入框 width 0→100% 过渡（照抄原生）
       jsxs('div', {
-        onClick: () => { closeAddFlow(); setSearchExpanded(true); requestAnimationFrame(() => searchInputRef.current?.focus()); },
+        onClick: () => { setSearchExpanded(true); requestAnimationFrame(() => searchInputRef.current?.focus()); },
         style: {
           flex: searchExpanded ? 1 : 'none',
           minWidth: 0,
@@ -348,7 +347,7 @@ function WorkspaceBrowser({ ctx, identity, sessions, renderSlot }: { ctx: any; i
           jsx('button', {
             type: 'button',
             title: '搜索会话',
-            onClick: (e: React.MouseEvent) => { e.stopPropagation(); closeAddFlow(); setSearchExpanded(true); requestAnimationFrame(() => searchInputRef.current?.focus()); },
+            onClick: (e: React.MouseEvent) => { e.stopPropagation(); setSearchExpanded(true); requestAnimationFrame(() => searchInputRef.current?.focus()); },
             style: iconBtnStyle,
             children: jsx(IconSearchOutline16, { size: searchExpanded ? 11 : 14 }),
           }),
@@ -397,12 +396,9 @@ function WorkspaceBrowser({ ctx, identity, sessions, renderSlot }: { ctx: any; i
         anchor: jsx('button', { type: 'button', title: '视图', onClick: () => setViewMenuOpen((v) => !v), style: iconBtnStyle, children: jsx(IconPersonalizationOutline16, {}) }),
       }),
 
-      // 添加：打开目录选择器（官方 directory-flow；搜索展开时隐藏）
-      !searchExpanded && jsx('button', { ref: addBtnRef, type: 'button', title: '新建工作区', onClick: openAddFlow, style: iconBtnStyle, children: jsx(IconProjectAddOutline16, { size: 16 }) }),
+    // 添加：打开原生目录选择器（搜索展开时隐藏）
+    !searchExpanded && jsx('button', { type: 'button', title: '新建工作区', onClick: openAddFlow, disabled: pickingFolder, style: iconBtnStyle, children: jsx(IconProjectAddOutline16, { size: 16 }) }),
     ] }),
-
-    // 官方目录选择 flow（Windows 弹原生对话框 / Linux 应用内浏览），由宿主组合的 native/browse 后端填入
-    renderSlot('sidebar.workspaces.directoryFlow', flowOwner),
 
     // 接纳失败提示
     flowError && jsx('div', { role: 'alert', style: { color: 'var(--dsw-alias-state-error-primary)', fontSize: 12, padding: '4px 8px' }, children: `添加工作区失败：${flowError}` }),
@@ -428,10 +424,11 @@ export function apply(ctx: any): void {
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
     name: 'sidebar.workspaces',
     priority: -1, // 低于官方 ui-workspace 的默认 0，shadow 原生浏览区（lowest renders）
-    // 注意：`sidebar.workspaces.directoryFlow` 子 slot 由官方 ui-workspace 的 entry
-    // 声明（children 表全局唯一，插件不得重复声明，否则官方包加载时报
-    // "slot ... is already declared"）。本 entry 仅 renderSlot 渲染该 hole，
-    // 未声明前 entries() 为空、可安全探测，官方 entry 注册后由 native/browse 后端填入。
+    // 注意：不声明 children。`sidebar.workspaces.directoryFlow` 子 slot 由官方
+    // ui-workspace 的 entry 声明（children 表全局唯一，插件重复声明会让官方包
+    // 加载报错）；而 renderSlot 授权要求 key 在本 entry 自己的 children 表里，
+    // 插件不能用 renderSlot 渲染该子 slot——新建工作区改为直接调
+    // ctx.workspaces.pickDirectory()（与官方 native 后端注入的 pick 同源）。
     inject: () => ({}),
   }, function FilteredBrowser(props: any) {
     const identity = useIdentity();
@@ -440,7 +437,6 @@ export function apply(ctx: any): void {
       ctx,
       identity,
       sessions,
-      renderSlot: props.renderSlot,
     });
   }));
 
