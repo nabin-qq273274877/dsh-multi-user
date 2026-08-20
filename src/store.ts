@@ -194,4 +194,44 @@ export class DataStore {
     writeJsonAtomic(this.grantsPath(userId), { workspaceRoot, updatedAt: new Date().toISOString() });
     fs.mkdirSync(workspaceRoot, { recursive: true });
   }
+
+  /* ---------- 用户加入的工作区路径清单（视图分档依据） ----------
+   *
+   * 每个用户维护一份「已加入的工作区路径」清单，存于 grants.json 的
+   * `workspacePaths` 字段。用户通过目录选择器选任意路径（如 D:\Project\foo）
+   * 都会加入该清单，仅该用户可见；这不是「专属目录的物理子目录」约束。
+   */
+
+  /** 读取某用户已加入的工作区路径清单。 */
+  getWorkspacePaths(userId: string): string[] {
+    const record = readJson<{ workspacePaths?: string[] }>(this.grantsPath(userId));
+    return Array.isArray(record?.workspacePaths) ? record.workspacePaths : [];
+  }
+
+  /** 把一条路径加入用户清单（去重，返回更新后的清单）。 */
+  addWorkspacePath(userId: string, p: string): string[] {
+    const record = readJson<{ workspaceRoot?: string; workspacePaths?: string[] }>(this.grantsPath(userId)) ?? {};
+    const list = Array.isArray(record.workspacePaths) ? record.workspacePaths.slice() : [];
+    const norm = normalizeForCompare(p);
+    if (!list.some((x) => normalizeForCompare(x) === norm)) list.push(p);
+    writeJsonAtomic(this.grantsPath(userId), { ...record, workspacePaths: list, updatedAt: new Date().toISOString() });
+    return list;
+  }
+
+  /** 从用户清单移除一条路径（按规范化比较），返回更新后的清单。 */
+  removeWorkspacePath(userId: string, p: string): string[] {
+    const record = readJson<{ workspaceRoot?: string; workspacePaths?: string[] }>(this.grantsPath(userId)) ?? {};
+    const list = Array.isArray(record.workspacePaths) ? record.workspacePaths.slice() : [];
+    const norm = normalizeForCompare(p);
+    const next = list.filter((x) => normalizeForCompare(x) !== norm);
+    writeJsonAtomic(this.grantsPath(userId), { ...record, workspacePaths: next, updatedAt: new Date().toISOString() });
+    return next;
+  }
+}
+
+/** 路径比较规范化：反斜杠→正斜杠，去尾分隔符，Windows 下统一小写。 */
+function normalizeForCompare(p: string): string {
+  let s = String(p).replace(/\\/g, '/').replace(/\/+$/, '');
+  if (process.platform === 'win32') s = s.toLowerCase();
+  return s;
 }

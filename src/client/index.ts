@@ -27,6 +27,7 @@ interface Identity {
   username: string | null;
   role: string | null;
   workspaceRoot: string | null; // null = 尚未加载
+  workspacePaths: string[]; // 该用户已加入的工作区路径清单（视图分档依据）
   loading: boolean;
 }
 
@@ -89,14 +90,32 @@ async function api(method: string, path: string, body?: Record<string, unknown>)
 
 /* ---------------- 身份 hook ---------------- */
 
-function useIdentity(): Identity {
+function useIdentity(): Identity & { addPath: (path: string) => Promise<void>; removePath: (path: string) => Promise<void> } {
   const [identity, setIdentity] = React.useState<Identity>(() => ({
     userId: null,
     username: null,
     role: null,
     workspaceRoot: null,
+    workspacePaths: [],
     loading: true,
   }));
+
+  // 把一条路径加入当前用户清单并立即刷新本地 state
+  const addPath = React.useCallback(async (path: string) => {
+    const r = await api('POST', '/api/mu/me/workspaces', { path });
+    if (r.status !== 200) throw new Error(r.json?.error || '加入工作区失败');
+    const paths = Array.isArray(r.json?.workspacePaths) ? (r.json.workspacePaths as string[]) : [];
+    setIdentity((prev) => ({ ...prev, workspacePaths: paths }));
+  }, []);
+
+  // 从当前用户清单移除一条路径
+  const removePath = React.useCallback(async (path: string) => {
+    const r = await api('POST', '/api/mu/me/workspaces/delete', { path });
+    if (r.status !== 200) throw new Error(r.json?.error || '移除工作区失败');
+    const paths = Array.isArray(r.json?.workspacePaths) ? (r.json.workspacePaths as string[]) : [];
+    setIdentity((prev) => ({ ...prev, workspacePaths: paths }));
+  }, []);
+
   React.useEffect(() => {
     let cancelled = false;
     fetch('/api/mu/me/grants', { credentials: 'same-origin' })
@@ -112,16 +131,28 @@ function useIdentity(): Identity {
           username: data.username ?? null,
           role: data.role ?? null,
           workspaceRoot: typeof data.workspaceRoot === 'string' ? data.workspaceRoot : null,
+          workspacePaths: [],
           loading: false,
         });
+        // 拉取该用户已加入的工作区路径清单
+        if (data.userId) {
+          fetch('/api/mu/me/workspaces', { credentials: 'same-origin' })
+            .then((r2) => (r2.ok ? r2.json() : { workspacePaths: [] }))
+            .then((d2: { workspacePaths?: unknown }) => {
+              if (cancelled) return;
+              const paths = Array.isArray(d2.workspacePaths) ? (d2.workspacePaths as string[]) : [];
+              setIdentity((prev) => ({ ...prev, workspacePaths: paths }));
+            })
+            .catch(() => {});
+        }
       })
       .catch(() => {
         if (cancelled) return;
-        setIdentity({ userId: null, username: null, role: null, workspaceRoot: null, loading: false });
+        setIdentity({ userId: null, username: null, role: null, workspaceRoot: null, workspacePaths: [], loading: false });
       });
     return () => { cancelled = true; };
   }, []);
-  return identity;
+  return { ...identity, addPath, removePath };
 }
 
 /** 订阅 `ctx.sessions.list`（ObservableSnapshot），返回会话数组。 */
@@ -156,12 +187,15 @@ function useWorkspaceSnapshot(ctx: any): WorkspaceListState {
   return snap;
 }
 
-/** 专属目录只做视图过滤：只显示 path 落在专属目录内的工作区（主管理员也过滤）。 */
+/** 视图分档：只显示「该用户已加入的路径清单」里的工作区（主管理员也过滤）。 */
 function filterWorkspaces(items: WorkspaceView[], identity: Identity): WorkspaceView[] {
   if (!identity.userId) return [];
-  if (identity.workspaceRoot == null) return items; // 专属目录尚未加载，先展示全量避免闪烁
-  const root = normalizePath(identity.workspaceRoot);
-  return items.filter((w) => isUnder(root, w.path));
+  // 路径清单尚未加载完成：先展示空，避免闪现他人工作区
+  const paths = identity.workspacePaths;
+  if (paths.length === 0) return [];
+  const norm = (p: string) => normalizePath(p).toLowerCase();
+  const set = new Set(paths.map(norm));
+  return items.filter((w) => set.has(norm(w.path)));
 }
 
 /* ---------------- UI 组件 ---------------- */
@@ -266,7 +300,7 @@ function WorkspaceItem({ workspace, sessions, onOpen, onDelete, onRename, onStar
   ] });
 }
 
-function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Identity; sessions: SessionSummary[] }) {
+function WorkspaceBrowser({ ctx, identity, sessions, addPath, removePath }: { ctx: any; identity: Identity; sessions: SessionSummary[]; addPath: (path: string) => Promise<void>; removePath: (path: string) => Promise<void> }) {
   const workspaceSnap = useWorkspaceSnapshot(ctx);
   const [query, setQuery] = React.useState('');
   const [searchExpanded, setSearchExpanded] = React.useState(false);
@@ -284,10 +318,8 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
   if (orderBy === 'updated') shown.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
 
   // 新建工作区：直接调 ctx.workspaces.pickDirectory()（Host 原生目录选择器，
-  // Windows 弹 IFileOpenDialog；取消返回 null），选定后 createWorkspace 接纳。
-  // 不再经 sidebar.workspaces.directoryFlow 子 slot 渲染：该子 slot 由官方
-  // ui-workspace entry 声明（children 表全局唯一，插件重复声明会让官方包加载
-  // 报错），而 renderSlot 授权要求 key 在本 entry 自己的 children 表里。
+  // Windows 弹 IFileOpenDialog；取消返回 null）。选定后先把路径记入当前用户的
+  // 工作区清单（视图分档依据），再 createWorkspace 写入全局 registry。
   const openAddFlow = async () => {
     setViewMenuOpen(false);
     setFlowError(null);
@@ -295,7 +327,8 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
     try {
       const path = await ctx.workspaces.pickDirectory();
       if (path === null) return; // 用户取消
-      await ctx.workspaces.create({ path });
+      await addPath(path); // 记入该用户清单，刷新视图过滤
+      await ctx.workspaces.create({ path }); // 写入全局 registry
     } catch (err) {
       setFlowError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -307,6 +340,7 @@ function WorkspaceBrowser({ ctx, identity, sessions }: { ctx: any; identity: Ide
     if (!confirm(`删除工作区「${w.title || w.path}」？仅移除工作区记录，目录与会话数据保留。`)) return;
     try {
       await ctx.workspaces.delete(w.workspaceId);
+      await removePath(w.path); // 同步移除该路径归属，刷新视图
     } catch (err) {
       alert(`删除失败：${err instanceof Error ? err.message : String(err)}`);
     }
@@ -431,12 +465,14 @@ export function apply(ctx: any): void {
     // ctx.workspaces.pickDirectory()（与官方 native 后端注入的 pick 同源）。
     inject: () => ({}),
   }, function FilteredBrowser(props: any) {
-    const identity = useIdentity();
+    const { addPath, removePath, ...identity } = useIdentity();
     const sessions = useSessionSnapshot(ctx);
     return jsx(WorkspaceBrowser, {
       ctx,
       identity,
       sessions,
+      addPath,
+      removePath,
     });
   }));
 

@@ -286,6 +286,27 @@ async function handleAdmin(store: DataStore, lifecycle: LifecycleManager, req: I
     });
   }
 
+  // 当前用户已加入的工作区路径清单（视图分档依据）
+  if (key === 'GET /api/mu/me/workspaces') {
+    return json(res, 200, { workspacePaths: store.getWorkspacePaths(userId) });
+  }
+
+  // 加入一条工作区路径到当前用户清单（任意路径，非专属目录子目录约束）
+  if (key === 'POST /api/mu/me/workspaces') {
+    const body = await readBody(req);
+    const p = String(body.path ?? '').trim();
+    if (!p) return json(res, 400, { ok: false, error: '缺少路径' });
+    return json(res, 200, { ok: true, workspacePaths: store.addWorkspacePath(userId, p) });
+  }
+
+  // 从当前用户清单移除一条工作区路径
+  if (key === 'POST /api/mu/me/workspaces/delete') {
+    const body = await readBody(req);
+    const p = String(body.path ?? '').trim();
+    if (!p) return json(res, 400, { ok: false, error: '缺少路径' });
+    return json(res, 200, { ok: true, workspacePaths: store.removeWorkspacePath(userId, p) });
+  }
+
   // 修改自己的密码（含主管理员，问题 3）
   if (key === 'POST /api/mu/me/password') {
     const body = await readBody(req);
